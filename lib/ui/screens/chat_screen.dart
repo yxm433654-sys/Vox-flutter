@@ -1,16 +1,14 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:dynamic_photo_chat_flutter/models/file_upload_response.dart';
 import 'package:dynamic_photo_chat_flutter/models/message.dart';
 import 'package:dynamic_photo_chat_flutter/services/realtime_service.dart';
 import 'package:dynamic_photo_chat_flutter/state/app_state.dart';
 import 'package:dynamic_photo_chat_flutter/ui/screens/video_player_screen.dart';
-import 'package:dynamic_photo_chat_flutter/ui/widgets/dynamic_photo_picker.dart';
 import 'package:dynamic_photo_chat_flutter/ui/widgets/message_bubble.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -25,7 +23,6 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _textCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
-  final _imagePicker = ImagePicker();
 
   final List<ChatMessage> _messages = [];
   RealtimeService? _realtime;
@@ -139,8 +136,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // ─── 发送文本 ───
-
   Future<void> _sendText() async {
     final text = _textCtrl.text.trim();
     if (text.isEmpty) return;
@@ -178,20 +173,21 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ─── 从相册选择并上传图片 ───
-
-  Future<void> _pickAndSendImage() async {
-    final xfile = await _imagePicker.pickImage(source: ImageSource.gallery);
-    if (xfile == null || !mounted) return;
+  Future<void> _pickAndUploadNormal() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: kIsWeb,
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'heic', 'mp4', 'mov'],
+    );
+    if (result == null || result.files.isEmpty) return;
+    if (!mounted) return;
     final state = context.read<AppState>();
     final session = state.session!;
     setState(() => _sending = true);
     try {
-      final uploaded = await state.files.uploadNormalByPath(
-        filePath: xfile.path,
-        fileName: xfile.name,
-        userId: session.userId,
-      );
+      final uploaded = await state.files
+          .uploadNormal(file: result.files.first, userId: session.userId);
       await _sendForUploadedNormal(uploaded, session.userId);
     } catch (e) {
       if (!mounted) return;
@@ -202,31 +198,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ─── 从相册选择并上传视频 ───
-
-  Future<void> _pickAndSendVideo() async {
-    final xfile = await _imagePicker.pickVideo(source: ImageSource.gallery);
-    if (xfile == null || !mounted) return;
-    final state = context.read<AppState>();
-    final session = state.session!;
-    setState(() => _sending = true);
-    try {
-      final uploaded = await state.files.uploadNormalByPath(
-        filePath: xfile.path,
-        fileName: xfile.name,
-        userId: session.userId,
-      );
-      await _sendForUploadedNormal(uploaded, session.userId);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  /// 处理普通图片/视频上传结果并发送消息
   Future<void> _sendForUploadedNormal(
       FileUploadResponse uploaded, int myId) async {
     final state = context.read<AppState>();
@@ -278,23 +249,31 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
   }
 
-  // ─── 从相册选择并上传动态照片（iOS Live Photo / Android Motion Photo）───
-
-  Future<void> _pickAndSendDynamicPhoto() async {
-    // 使用 photo_manager 的选择器, 让用户从相册选一张图片
-    final asset = await DynamicPhotoPickerDialog.pick(context);
-    if (asset == null || !mounted) return;
-
+  Future<void> _pickAndUploadLivePhoto() async {
+    final jpegPick = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: kIsWeb,
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg'],
+    );
+    if (jpegPick == null || jpegPick.files.isEmpty) return;
+    final movPick = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: kIsWeb,
+      type: FileType.custom,
+      allowedExtensions: const ['mov', 'mp4'],
+    );
+    if (movPick == null || movPick.files.isEmpty) return;
+    if (!mounted) return;
     final state = context.read<AppState>();
     final session = state.session!;
     setState(() => _sending = true);
-
     try {
-      if (Platform.isIOS) {
-        await _uploadIOSDynamicPhoto(asset, state, session.userId);
-      } else {
-        await _uploadAndroidDynamicPhoto(asset, state, session.userId);
-      }
+      final uploaded = await state.files.uploadLivePhoto(
+          jpeg: jpegPick.files.first,
+          mov: movPick.files.first,
+          userId: session.userId);
+      await _sendForDynamic(uploaded, session.userId);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -304,62 +283,31 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  /// iOS: 获取 Live Photo 的图片和视频，上传到 /upload/live-photo
-  Future<void> _uploadIOSDynamicPhoto(
-      AssetEntity asset, AppState state, int myId) async {
-    // 获取原始图片文件
-    final File? imageFile = await asset.originFile;
-    if (imageFile == null) {
-      throw Exception('无法加载图片文件');
-    }
-
-    // 尝试获取 Live Photo 的视频部分
-    // iOS Live Photo 的 subtype 包含 (subtype & 8) != 0
-    final bool isLivePhoto = (asset.subtype & 8) != 0;
-
-    if (isLivePhoto) {
-      // 获取关联视频的 URL
-      final String? videoUrl = await asset.getMediaUrl();
-      if (videoUrl != null) {
-        final videoPath = Uri.parse(videoUrl).toFilePath();
-        final uploaded = await state.files.uploadLivePhotoByPath(
-          jpegPath: imageFile.path,
-          jpegName: asset.title ?? 'photo.jpg',
-          videoPath: videoPath,
-          videoName: '${asset.title ?? "live"}.mov',
-          userId: myId,
-        );
-        await _sendForDynamic(uploaded, myId);
-        return;
-      }
-    }
-
-    // 不是 Live Photo 或无法获取视频，尝试作为 Motion Photo 上传
-    final uploaded = await state.files.uploadMotionPhotoByPath(
-      filePath: imageFile.path,
-      fileName: asset.title ?? 'photo.jpg',
-      userId: myId,
+  Future<void> _pickAndUploadMotionPhoto() async {
+    final pick = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: kIsWeb,
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg'],
     );
-    await _sendForDynamic(uploaded, myId);
+    if (pick == null || pick.files.isEmpty) return;
+    if (!mounted) return;
+    final state = context.read<AppState>();
+    final session = state.session!;
+    setState(() => _sending = true);
+    try {
+      final uploaded = await state.files
+          .uploadMotionPhoto(file: pick.files.first, userId: session.userId);
+      await _sendForDynamic(uploaded, session.userId);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
-  /// Android: 获取原始文件，上传到 /upload/motion-photo
-  Future<void> _uploadAndroidDynamicPhoto(
-      AssetEntity asset, AppState state, int myId) async {
-    final File? file = await asset.originFile;
-    if (file == null) {
-      throw Exception('无法加载图片文件');
-    }
-
-    final uploaded = await state.files.uploadMotionPhotoByPath(
-      filePath: file.path,
-      fileName: asset.title ?? 'photo.jpg',
-      userId: myId,
-    );
-    await _sendForDynamic(uploaded, myId);
-  }
-
-  /// 处理动态照片上传结果并发送消息
   Future<void> _sendForDynamic(FileUploadResponse uploaded, int myId) async {
     final coverId = uploaded.coverId;
     final videoId = uploaded.videoId;
@@ -394,8 +342,6 @@ class _ChatScreenState extends State<ChatScreen> {
         .push(MaterialPageRoute(builder: (_) => VideoPlayerScreen(url: url)));
   }
 
-  // ─── 附件菜单 ───
-
   Future<void> _showAttachMenu() async {
     if (_sending) return;
     final action = await showModalBottomSheet<String>(
@@ -408,21 +354,18 @@ class _ChatScreenState extends State<ChatScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.image_outlined),
-                title: const Text('发送图片'),
-                subtitle: const Text('从相册选择图片'),
-                onTap: () => Navigator.of(ctx).pop('image'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.videocam_outlined),
-                title: const Text('发送视频'),
-                subtitle: const Text('从相册选择视频'),
-                onTap: () => Navigator.of(ctx).pop('video'),
+                title: const Text('上传图片/视频'),
+                onTap: () => Navigator.of(ctx).pop('normal'),
               ),
               ListTile(
                 leading: const Icon(Icons.motion_photos_on_outlined),
-                title: const Text('发送动态照片'),
-                subtitle: const Text('Live Photo / Motion Photo'),
-                onTap: () => Navigator.of(ctx).pop('dynamic'),
+                title: const Text('上传 Live Photo (JPEG + MOV/MP4)'),
+                onTap: () => Navigator.of(ctx).pop('live'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.motion_photos_auto_outlined),
+                title: const Text('上传 Motion Photo (带XMP的JPEG)'),
+                onTap: () => Navigator.of(ctx).pop('motion'),
               ),
               const SizedBox(height: 12),
             ],
@@ -430,10 +373,11 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       },
     );
-    if (!mounted || action == null) return;
-    if (action == 'image') return _pickAndSendImage();
-    if (action == 'video') return _pickAndSendVideo();
-    if (action == 'dynamic') return _pickAndSendDynamicPhoto();
+    if (!mounted) return;
+    if (action == null) return;
+    if (action == 'normal') return _pickAndUploadNormal();
+    if (action == 'live') return _pickAndUploadLivePhoto();
+    if (action == 'motion') return _pickAndUploadMotionPhoto();
   }
 
   @override
