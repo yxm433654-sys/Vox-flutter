@@ -638,7 +638,10 @@ class _ChatScreenState extends State<ChatScreen> {
       {required int messageId, required int coverId}) async {
     final state = context.read<AppState>();
     for (var i = 0; i < 20; i++) {
-      await Future<void>.delayed(const Duration(seconds: 2));
+      // 前几轮 400ms 快速探测，避免首帧已就绪仍等满 2s；之后 1s 降低请求频率
+      await Future<void>.delayed(
+        Duration(milliseconds: i < 8 ? 400 : 1000),
+      );
       if (!mounted) return;
       try {
         final info = await state.files.preview(fileId: coverId);
