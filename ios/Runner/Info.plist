@@ -6,6 +6,8 @@
 	<string>需要访问相册以选择图片和视频</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>需要保存图片到相册</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>需要访问局域网中的聊天服务器以进行登录、收发消息与上传文件</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
