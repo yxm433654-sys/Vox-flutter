@@ -29,7 +29,7 @@ class ImagePreviewScreen extends StatelessWidget {
                   ),
                   Expanded(
                     child: Text(
-                      title ?? 'Image',
+                      title ?? '图片',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: Colors.white,
@@ -44,7 +44,7 @@ class ImagePreviewScreen extends StatelessWidget {
                         await MediaSaver.saveImageFromUrl(url, title: title);
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Saved to local album.')),
+                          const SnackBar(content: Text('已保存到本地相册')),
                         );
                       } catch (e) {
                         if (!context.mounted) return;
@@ -69,7 +69,7 @@ class ImagePreviewScreen extends StatelessWidget {
                     fit: BoxFit.contain,
                     errorBuilder: (_, __, ___) => const Center(
                       child: Text(
-                        'Image failed to load.',
+                        '图片加载失败',
                         style: TextStyle(color: Colors.white),
                       ),
                     ),

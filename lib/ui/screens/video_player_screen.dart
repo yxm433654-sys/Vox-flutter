@@ -80,13 +80,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         child: Column(
           children: [
             _VideoDetailTopBar(
-              title: widget.title ?? 'Video',
+              title: widget.title ?? '视频',
               onSave: () async {
                 final messenger = ScaffoldMessenger.of(context);
                 try {
                   await MediaSaver.saveVideoFromUrl(widget.url, title: widget.title);
                   messenger.showSnackBar(
-                    const SnackBar(content: Text('Saved to local album.')),
+                    const SnackBar(content: Text('已保存到本地相册')),
                   );
                 } catch (e) {
                   messenger.showSnackBar(
@@ -116,8 +116,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                                 const SizedBox(height: 12),
                                 Text(
                                   progress == null
-                                      ? 'Loading video...'
-                                      : 'Loading video... ${(progress * 100).round()}%',
+                                      ? '正在加载视频...'
+                                      : '正在加载视频... ${(progress * 100).round()}%',
                                   style: const TextStyle(color: Colors.white70),
                                 ),
                               ],

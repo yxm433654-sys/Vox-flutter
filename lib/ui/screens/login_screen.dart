@@ -1,4 +1,5 @@
 import 'package:dynamic_photo_chat_flutter/state/app_state.dart';
+import 'package:dynamic_photo_chat_flutter/services/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -38,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen>
     final username = _loginUserCtrl.text.trim();
     final password = _loginPassCtrl.text;
     if (username.isEmpty || password.isEmpty) {
-      _showSnack('Please enter both username and password.');
+      _showSnack('请输入用户名和密码');
       return;
     }
     setState(() => _loading = true);
@@ -57,11 +58,11 @@ class _LoginScreenState extends State<LoginScreen>
     final username = _regUserCtrl.text.trim();
     final password = _regPassCtrl.text;
     if (username.length < 2) {
-      _showSnack('Username must be at least 2 characters.');
+      _showSnack('用户名至少需要 2 个字符');
       return;
     }
     if (password.length < 6) {
-      _showSnack('Password must be at least 6 characters.');
+      _showSnack('密码至少需要 6 位');
       return;
     }
     setState(() => _loading = true);
@@ -79,25 +80,50 @@ class _LoginScreenState extends State<LoginScreen>
   Future<void> _editApiBaseUrl() async {
     final state = context.read<AppState>();
     final controller = TextEditingController(text: state.apiBaseUrl);
+    final messenger = ScaffoldMessenger.of(context);
     final value = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('API endpoint'),
+        title: const Text('API 地址'),
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(
-            labelText: 'API Base URL',
+            labelText: 'API 基础地址',
             hintText: 'http://192.168.x.x:8080',
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final value = controller.text.trim();
+              if (value.isEmpty) return;
+              try {
+                final client = ApiClient(baseUrl: value);
+                await client.get<List<Object?>>(
+                  '/api/user/search',
+                  query: const {'keyword': 'test'},
+                  decode: (raw) => (raw as List?)?.cast<Object?>() ?? const [],
+                );
+                if (!ctx.mounted) return;
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('API 连接测试成功')),
+                );
+              } catch (_) {
+                if (!ctx.mounted) return;
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('API 连接测试失败')),
+                );
+              }
+            },
+            child: const Text('测试'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: const Text('Save'),
+            child: const Text('保存'),
           ),
         ],
       ),
@@ -189,7 +215,7 @@ class _LoginScreenState extends State<LoginScreen>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Connect with friends using photos, videos, and live moments.',
+                    '用图片、视频和 Live Photo 记录每一次聊天瞬间。',
                     style: TextStyle(
                       color: Colors.grey.shade600,
                       height: 1.5,
@@ -208,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen>
                       border: Border.all(color: const Color(0xFFE5E7EB)),
                     ),
                     child: Text(
-                      'API: $apiBaseUrl',
+                      'API：$apiBaseUrl',
                       style: const TextStyle(
                         color: Color(0xFF64748B),
                         fontSize: 13,
@@ -218,21 +244,27 @@ class _LoginScreenState extends State<LoginScreen>
                   const SizedBox(height: 20),
                   Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF3F4F6),
-                      borderRadius: BorderRadius.circular(16),
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
                     ),
                     child: TabBar(
                       controller: _tabController,
                       indicator: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
+                        color: const Color(0xFF2563EB),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      labelStyle: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                       ),
                       dividerColor: Colors.transparent,
-                      labelColor: const Color(0xFF111827),
-                      unselectedLabelColor: const Color(0xFF6B7280),
+                      labelColor: Colors.white,
+                      unselectedLabelColor: const Color(0xFF2563EB),
                       tabs: const [
-                        Tab(text: 'Login'),
-                        Tab(text: 'Register'),
+                        Tab(text: '登录'),
+                        Tab(text: '注册'),
                       ],
                     ),
                   ),
@@ -245,14 +277,14 @@ class _LoginScreenState extends State<LoginScreen>
                         _AuthForm(
                           usernameController: _loginUserCtrl,
                           passwordController: _loginPassCtrl,
-                          submitText: 'Login',
+                          submitText: '登录',
                           onSubmit: _doLogin,
                           loading: _loading,
                         ),
                         _AuthForm(
                           usernameController: _regUserCtrl,
                           passwordController: _regPassCtrl,
-                          submitText: 'Create account',
+                          submitText: '创建账号',
                           onSubmit: _doRegister,
                           loading: _loading,
                         ),
@@ -292,7 +324,7 @@ class _AuthForm extends StatelessWidget {
           controller: usernameController,
           textInputAction: TextInputAction.next,
           decoration: const InputDecoration(
-            labelText: 'Username',
+            labelText: '用户名',
             prefixIcon: Icon(Icons.person_outline_rounded),
           ),
         ),
@@ -302,7 +334,7 @@ class _AuthForm extends StatelessWidget {
           obscureText: true,
           onSubmitted: (_) => onSubmit(),
           decoration: const InputDecoration(
-            labelText: 'Password',
+            labelText: '密码',
             prefixIcon: Icon(Icons.lock_outline_rounded),
           ),
         ),

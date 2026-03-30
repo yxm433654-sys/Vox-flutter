@@ -139,7 +139,7 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
                   );
                   messenger.showSnackBar(
                     const SnackBar(
-                      content: Text('Saved the static cover to local album.'),
+                      content: Text('已将静态封面保存到本地相册'),
                     ),
                   );
                 } catch (e) {
@@ -206,8 +206,8 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
                                       const SizedBox(height: 12),
                                       Text(
                                         progress == null
-                                            ? 'Loading motion...'
-                                            : 'Loading motion... ${(progress * 100).round()}%',
+                                            ? '正在加载 Live Photo...'
+                                            : '正在加载 Live Photo... ${(progress * 100).round()}%',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontWeight: FontWeight.w600,

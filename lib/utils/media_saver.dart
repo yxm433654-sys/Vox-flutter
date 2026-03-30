@@ -7,7 +7,7 @@ class MediaSaver {
   static Future<void> saveImageFromUrl(String url, {String? title}) async {
     final permission = await PhotoManager.requestPermissionExtend();
     if (!permission.isAuth) {
-      throw Exception('Please allow photo library access first.');
+      throw Exception('请先允许访问相册');
     }
     final downloaded = await MediaDownloader.downloadToCacheFile(
       url: url,
@@ -23,7 +23,7 @@ class MediaSaver {
   static Future<void> saveVideoFromUrl(String url, {String? title}) async {
     final permission = await PhotoManager.requestPermissionExtend();
     if (!permission.isAuth) {
-      throw Exception('Please allow photo library access first.');
+      throw Exception('请先允许访问相册');
     }
     final downloaded = await MediaDownloader.downloadToCacheFile(
       url: url,

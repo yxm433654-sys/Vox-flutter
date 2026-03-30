@@ -77,7 +77,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Please login again.';
+        _error = '请重新登录';
       });
       return;
     }
@@ -782,7 +782,7 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
     if (paths.isEmpty) {
-      _showSnack('No media found.');
+      _showSnack('没有找到媒体内容');
       return null;
     }
 
@@ -896,11 +896,11 @@ class _ChatScreenState extends State<ChatScreen> {
   String _pickerEmptyMessage(_AssetPickerMode mode) {
     switch (mode) {
       case _AssetPickerMode.image:
-        return 'No images found.';
+        return '没有找到图片';
       case _AssetPickerMode.video:
-        return 'No videos found.';
+        return '没有找到视频';
       case _AssetPickerMode.livePhoto:
-        return 'No live photos found.';
+        return '没有找到 Live Photo';
     }
   }
 
@@ -919,9 +919,10 @@ class _ChatScreenState extends State<ChatScreen> {
   ) async {
     final navigator = Navigator.of(context);
     final rootNavigator = Navigator.of(context, rootNavigator: true);
+    final dialogContext = rootNavigator.context;
     final progress = ValueNotifier<double?>(null);
     showDialog<void>(
-      context: context,
+      context: dialogContext,
       barrierDismissible: false,
       builder: (_) => ValueListenableBuilder<double?>(
         valueListenable: progress,
@@ -934,8 +935,8 @@ class _ChatScreenState extends State<ChatScreen> {
               const SizedBox(height: 16),
               Text(
                 value == null
-                    ? 'Preparing Live Photo...'
-                    : 'Preparing Live Photo... ${(value * 100).round()}%',
+                    ? '正在准备 Live Photo...'
+                    : '正在准备 Live Photo... ${(value * 100).round()}%',
                 style: const TextStyle(color: Colors.white),
               ),
             ],
@@ -944,6 +945,9 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
     try {
+      if (coverUrl.trim().isNotEmpty) {
+        await precacheImage(NetworkImage(coverUrl), dialogContext);
+      }
       await MediaDownloader.downloadToCacheFile(
         url: videoUrl,
         extensionHint: 'mp4',
@@ -957,9 +961,11 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     } finally {
       progress.dispose();
-      if (mounted) rootNavigator.pop();
+      if (rootNavigator.mounted && rootNavigator.canPop()) {
+        rootNavigator.pop();
+      }
     }
-    if (!mounted) return;
+    if (!navigator.mounted) return;
     navigator.push(
       MaterialPageRoute(
         builder: (_) => DynamicPhotoScreen(
@@ -1007,14 +1013,14 @@ class _ChatScreenState extends State<ChatScreen> {
           value: _ChatAction.clearConversation,
           child: _MenuActionRow(
             icon: Icons.delete_sweep_outlined,
-            label: 'Clear chat history',
+            label: '清空聊天记录',
           ),
         ),
         PopupMenuItem(
           value: _ChatAction.clearCache,
           child: _MenuActionRow(
             icon: Icons.cleaning_services_outlined,
-            label: 'Clear cache',
+            label: '清除缓存',
           ),
         ),
       ],
@@ -1032,18 +1038,18 @@ class _ChatScreenState extends State<ChatScreen> {
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('Clear chat history?'),
+            title: const Text('清空聊天记录？'),
             content: const Text(
-              'This will remove the current one-to-one conversation history from the server.',
+              '这会清空当前单聊的服务器聊天记录。',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Cancel'),
+                child: const Text('取消'),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Clear'),
+                child: const Text('清空'),
               ),
             ],
           ),
@@ -1074,7 +1080,7 @@ class _ChatScreenState extends State<ChatScreen> {
       await DefaultCacheManager().emptyCache();
       imageCache.clear();
       imageCache.clearLiveImages();
-      _showSnack('Media cache cleared.');
+      _showSnack('缓存已清除');
     } catch (e) {
       _showSnack(_toUserError(e));
     }
@@ -1104,7 +1110,7 @@ class _ChatScreenState extends State<ChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Send Media',
+                  '发送媒体',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
@@ -1116,7 +1122,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   children: [
                     _AttachTile(
                       icon: Icons.image_outlined,
-                      label: 'Image',
+                      label: '图片',
                       color: const Color(0xFFE0F2FE),
                       iconColor: const Color(0xFF0284C7),
                       onTap: () =>
@@ -1124,7 +1130,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     _AttachTile(
                       icon: Icons.smart_display_outlined,
-                      label: 'Video',
+                      label: '视频',
                       color: const Color(0xFFDCFCE7),
                       iconColor: const Color(0xFF16A34A),
                       onTap: () =>
@@ -1214,7 +1220,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     setState(() => _error = null);
                     _init();
                   },
-                  child: const Text('Retry'),
+                  child: const Text('重试'),
                 ),
               ],
             ),
@@ -1328,7 +1334,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             },
                             onSubmitted: (_) => _sendText(),
                             decoration: const InputDecoration(
-                              hintText: 'Type a message',
+                              hintText: '输入消息',
                               border: InputBorder.none,
                               contentPadding: EdgeInsets.symmetric(
                                 horizontal: 16,
@@ -1422,22 +1428,38 @@ const List<String> _emojiSet = <String>[
   '😁',
   '😂',
   '🤣',
+  '😊',
   '🥹',
   '😍',
   '😘',
+  '😜',
   '😎',
   '🤔',
+  '😴',
+  '😅',
+  '🤗',
   '😭',
   '😡',
+  '🥳',
   '👍',
+  '👌',
+  '✌️',
   '👏',
   '🙏',
   '🎉',
   '❤️',
+  '💖',
+  '💯',
   '🔥',
   '🌹',
   '🍀',
+  '☕',
+  '🍉',
+  '🎂',
   '🐶',
+  '🐱',
+  '🌙',
+  '⭐',
 ];
 
 class _AttachTile extends StatelessWidget {

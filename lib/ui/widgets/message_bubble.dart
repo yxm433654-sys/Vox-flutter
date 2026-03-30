@@ -61,7 +61,7 @@ class MessageBubble extends StatelessWidget {
         if (status == 'SENDING')
           const Padding(
             padding: EdgeInsets.only(top: 6),
-            child: _InlineStatus(label: 'Sending...'),
+            child: _InlineStatus(label: '发送中'),
           ),
       ],
     );
@@ -170,7 +170,7 @@ class MessageBubble extends StatelessWidget {
                 fit: BoxFit.contain,
               ),
               if (processing)
-                const Center(child: _InlineStatus(label: 'Processing'))
+                const Center(child: _InlineStatus(label: '处理中'))
               else
                 const Center(child: _PlayBadge()),
             ],
@@ -228,7 +228,7 @@ class MessageBubble extends StatelessWidget {
                 child: _LiveBadge(),
               ),
               if (processing)
-                const Center(child: _InlineStatus(label: 'Preparing')),
+                const Center(child: _InlineStatus(label: '准备中')),
             ],
           ),
         ),
