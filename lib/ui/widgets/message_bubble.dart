@@ -122,16 +122,13 @@ class MessageBubble extends StatelessWidget {
       onTap: url == null || url.trim().isEmpty
           ? null
           : () => onPreviewImage(_resolveUrl(context, url)),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: SizedBox(
-          width: size.width,
-          height: size.height,
-          child: _buildMediaImage(
-            context: context,
-            url: url,
-            fit: BoxFit.contain,
-          ),
+      child: _MediaCard(
+        width: size.width,
+        height: size.height,
+        child: _buildMediaImage(
+          context: context,
+          url: url,
+          fit: BoxFit.cover,
         ),
       ),
     );
@@ -156,25 +153,22 @@ class MessageBubble extends StatelessWidget {
       onTap: videoUrl == null || videoUrl.trim().isEmpty
           ? null
           : () => onPlayVideo(_resolveUrl(context, videoUrl)),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: SizedBox(
-          width: size.width,
-          height: size.height,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _buildMediaImage(
-                context: context,
-                url: coverUrl,
-                fit: BoxFit.contain,
-              ),
-              if (processing)
-                const Center(child: _InlineStatus(label: '处理中'))
-              else
-                const Center(child: _PlayBadge()),
-            ],
-          ),
+      child: _MediaCard(
+        width: size.width,
+        height: size.height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildMediaImage(
+              context: context,
+              url: coverUrl,
+              fit: BoxFit.cover,
+            ),
+            if (processing)
+              const Center(child: _InlineStatus(label: '处理中'))
+            else
+              const Center(child: _PlayBadge()),
+          ],
         ),
       ),
     );
@@ -209,28 +203,25 @@ class MessageBubble extends StatelessWidget {
                 ),
               );
             },
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: SizedBox(
-          width: size.width,
-          height: size.height,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _buildMediaImage(
-                context: context,
-                url: coverUrl,
-                fit: BoxFit.contain,
-              ),
-              const Positioned(
-                top: 8,
-                left: 8,
-                child: _LiveBadge(),
-              ),
-              if (processing)
-                const Center(child: _InlineStatus(label: '准备中')),
-            ],
-          ),
+      child: _MediaCard(
+        width: size.width,
+        height: size.height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildMediaImage(
+              context: context,
+              url: coverUrl,
+              fit: BoxFit.cover,
+            ),
+            const Positioned(
+              top: 8,
+              left: 8,
+              child: _LiveBadge(),
+            ),
+            if (processing)
+              const Center(child: _InlineStatus(label: '准备中')),
+          ],
         ),
       ),
     );
@@ -242,40 +233,28 @@ class MessageBubble extends StatelessWidget {
     required BoxFit fit,
   }) {
     if (localCoverBytes != null) {
-      return Container(
-        color: const Color(0xFFF3F4F6),
-        alignment: Alignment.center,
-        child: Image.memory(
-          localCoverBytes!,
-          fit: fit,
-          gaplessPlayback: true,
-        ),
+      return Image.memory(
+        localCoverBytes!,
+        fit: fit,
+        gaplessPlayback: true,
       );
     }
     if (localCoverPath != null && localCoverPath!.trim().isNotEmpty) {
-      return Container(
-        color: const Color(0xFFF3F4F6),
-        alignment: Alignment.center,
-        child: Image.file(
-          File(localCoverPath!),
-          fit: fit,
-          gaplessPlayback: true,
-        ),
+      return Image.file(
+        File(localCoverPath!),
+        fit: fit,
+        gaplessPlayback: true,
       );
     }
     if (url == null || url.trim().isEmpty) {
       return const _NeutralPlaceholder();
     }
-    return Container(
-      color: const Color(0xFFF3F4F6),
-      alignment: Alignment.center,
-      child: Image(
-        image: CachedNetworkImageProvider(_resolveUrl(context, url)),
-        fit: fit,
-        gaplessPlayback: true,
-        filterQuality: FilterQuality.medium,
-        errorBuilder: (_, __, ___) => const _NeutralPlaceholder(),
-      ),
+    return Image(
+      image: CachedNetworkImageProvider(_resolveUrl(context, url)),
+      fit: fit,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
+      errorBuilder: (_, __, ___) => const _NeutralPlaceholder(),
     );
   }
 
@@ -385,6 +364,36 @@ class _Avatar extends StatelessWidget {
         style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _MediaCard extends StatelessWidget {
+  const _MediaCard({
+    required this.width,
+    required this.height,
+    required this.child,
+  });
+
+  final double width;
+  final double height;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      height: height,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: child,
         ),
       ),
     );

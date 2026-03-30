@@ -29,6 +29,7 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
   bool _loading = false;
   bool _holding = false;
   bool _showVideo = false;
+  bool _closing = false;
   String? _error;
   double _aspectRatio = 3 / 4;
   int _received = 0;
@@ -46,12 +47,13 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
 
   @override
   void dispose() {
+    unawaited(_stopPreview());
     _controller?.dispose();
     super.dispose();
   }
 
   Future<void> _ensureController() async {
-    if (_controller != null) return;
+    if (_controller != null || _loading) return;
 
     setState(() {
       _loading = true;
@@ -96,7 +98,9 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
     await HapticFeedback.heavyImpact();
     await _ensureController();
     final controller = _controller;
-    if (!_holding || controller == null) return;
+    if (!_holding || controller == null || !controller.value.isInitialized) {
+      return;
+    }
     await controller.seekTo(Duration.zero);
     await controller.play();
     if (mounted) {
@@ -111,8 +115,17 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
       await controller.pause();
       await controller.seekTo(Duration.zero);
     }
-    if (mounted) {
+    if (mounted && _showVideo) {
       setState(() => _showVideo = false);
+    }
+  }
+
+  Future<void> _handleExit() async {
+    if (_closing) return;
+    _closing = true;
+    await _stopPreview();
+    if (mounted) {
+      Navigator.of(context).pop();
     }
   }
 
@@ -123,123 +136,136 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
         ? null
         : (_received / _total!).clamp(0.0, 1.0);
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _DetailTopBar(
-              title: widget.title ?? 'Live Photo',
-              onSave: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                try {
-                  await MediaSaver.saveImageFromUrl(
-                    widget.coverUrl,
-                    title: widget.title,
-                  );
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('已将静态封面保存到本地相册'),
-                    ),
-                  );
-                } catch (e) {
-                  messenger.showSnackBar(
-                    SnackBar(content: Text(e.toString())),
-                  );
-                }
-              },
-            ),
-            Expanded(
-              child: Center(
-                child: GestureDetector(
-                  onLongPressStart: (_) => _startPreview(),
-                  onLongPressEnd: (_) => _stopPreview(),
-                  onLongPressUp: _stopPreview,
-                  child: AnimatedScale(
-                    duration: const Duration(milliseconds: 160),
-                    curve: Curves.easeOut,
-                    scale: _holding ? 0.985 : 1.0,
-                    child: AspectRatio(
-                      aspectRatio: _aspectRatio,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Container(color: const Color(0xFF111111)),
-                          if (widget.coverUrl.trim().isNotEmpty)
-                            Image.network(
-                              widget.coverUrl,
-                              fit: BoxFit.contain,
-                              gaplessPlayback: true,
-                              errorBuilder: (_, __, ___) =>
-                                  const _DetailPlaceholder(),
-                            )
-                          else
-                            const _DetailPlaceholder(),
-                          if (!_showVideo)
-                            const Positioned(
-                              top: 12,
-                              left: 12,
-                              child: _LiveBadge(),
-                            ),
-                          if (_showVideo &&
-                              controller != null &&
-                              controller.value.isInitialized)
-                            FittedBox(
-                              fit: BoxFit.contain,
-                              child: SizedBox(
-                                width: controller.value.size.width,
-                                height: controller.value.size.height,
-                                child: VideoPlayer(controller),
-                              ),
-                            ),
-                          if (_loading)
-                            Positioned.fill(
-                              child: Container(
-                                color: Colors.black.withOpacity(0.18),
-                                alignment: Alignment.center,
-                                child: SizedBox(
-                                  width: 220,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      LinearProgressIndicator(value: progress),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        progress == null
-                                            ? '正在加载 Live Photo...'
-                                            : '正在加载 Live Photo... ${(progress * 100).round()}%',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          unawaited(_handleExit());
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _DetailTopBar(
+                title: widget.title ?? 'Live Photo',
+                onBack: _handleExit,
+                onSave: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    await MediaSaver.saveImageFromUrl(
+                      widget.coverUrl,
+                      title: widget.title,
+                    );
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('已将静态封面保存到本地相册'),
+                      ),
+                    );
+                  } catch (e) {
+                    messenger.showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
+                  }
+                },
+              ),
+              Expanded(
+                child: Center(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onLongPressStart: (_) => _startPreview(),
+                    onLongPressEnd: (_) => _stopPreview(),
+                    onLongPressUp: _stopPreview,
+                    child: AnimatedScale(
+                      duration: const Duration(milliseconds: 160),
+                      curve: Curves.easeOut,
+                      scale: _holding ? 0.985 : 1.0,
+                      child: AspectRatio(
+                        aspectRatio: _aspectRatio,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Container(color: const Color(0xFF111111)),
+                              if (widget.coverUrl.trim().isNotEmpty)
+                                Image.network(
+                                  widget.coverUrl,
+                                  fit: BoxFit.cover,
+                                  gaplessPlayback: true,
+                                  errorBuilder: (_, __, ___) =>
+                                      const _DetailPlaceholder(),
+                                )
+                              else
+                                const _DetailPlaceholder(),
+                              if (!_showVideo)
+                                const Positioned(
+                                  top: 12,
+                                  left: 12,
+                                  child: _LiveBadge(),
+                                ),
+                              if (_showVideo &&
+                                  controller != null &&
+                                  controller.value.isInitialized)
+                                FittedBox(
+                                  fit: BoxFit.cover,
+                                  child: SizedBox(
+                                    width: controller.value.size.width,
+                                    height: controller.value.size.height,
+                                    child: VideoPlayer(controller),
                                   ),
                                 ),
-                              ),
-                            ),
-                          if (_error != null)
-                            Positioned.fill(
-                              child: Container(
-                                color: Colors.black.withOpacity(0.26),
-                                alignment: Alignment.center,
-                                padding: const EdgeInsets.all(24),
-                                child: Text(
-                                  _error!,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(color: Colors.white),
+                              if (_loading)
+                                Positioned.fill(
+                                  child: Container(
+                                    color: Colors.black.withOpacity(0.18),
+                                    alignment: Alignment.center,
+                                    child: SizedBox(
+                                      width: 220,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          LinearProgressIndicator(value: progress),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            progress == null
+                                                ? '正在加载 Live Photo...'
+                                                : '正在加载 Live Photo... ${(progress * 100).round()}%',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                        ],
+                              if (_error != null)
+                                Positioned.fill(
+                                  child: Container(
+                                    color: Colors.black.withOpacity(0.26),
+                                    alignment: Alignment.center,
+                                    padding: const EdgeInsets.all(24),
+                                    child: Text(
+                                      _error!,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 28),
-          ],
+              const SizedBox(height: 28),
+            ],
+          ),
         ),
       ),
     );
@@ -249,10 +275,12 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
 class _DetailTopBar extends StatelessWidget {
   const _DetailTopBar({
     required this.title,
+    required this.onBack,
     required this.onSave,
   });
 
   final String title;
+  final Future<void> Function() onBack;
   final Future<void> Function() onSave;
 
   @override
@@ -262,7 +290,7 @@ class _DetailTopBar extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => unawaited(onBack()),
             icon: const Icon(Icons.arrow_back_ios_new_rounded),
             color: Colors.white,
           ),

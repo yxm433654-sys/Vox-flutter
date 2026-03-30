@@ -45,6 +45,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _userAtBottom = true;
   int _tempMessageSeed = -1;
   bool _showEmojiPanel = false;
+  bool _openingDynamicPhoto = false;
 
   @override
   void initState() {
@@ -917,19 +918,30 @@ class _ChatScreenState extends State<ChatScreen> {
     String videoUrl,
     double aspectRatio,
   ) async {
+    if (_openingDynamicPhoto) return;
+    _openingDynamicPhoto = true;
     if (coverUrl.trim().isNotEmpty) {
-      await precacheImage(NetworkImage(coverUrl), context);
-      if (!mounted) return;
+      try {
+        await precacheImage(NetworkImage(coverUrl), context);
+      } catch (_) {}
+      if (!mounted) {
+        _openingDynamicPhoto = false;
+        return;
+      }
     }
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => DynamicPhotoScreen(
-          coverUrl: coverUrl,
-          videoUrl: videoUrl,
-          initialAspectRatio: aspectRatio,
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => DynamicPhotoScreen(
+            coverUrl: coverUrl,
+            videoUrl: videoUrl,
+            initialAspectRatio: aspectRatio,
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      _openingDynamicPhoto = false;
+    }
   }
 
   Future<void> _handleChatAction(_ChatAction action) async {
