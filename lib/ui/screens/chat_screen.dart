@@ -13,6 +13,7 @@ import 'package:dynamic_photo_chat_flutter/utils/media_downloader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 
@@ -282,6 +283,19 @@ class _ChatScreenState extends State<ChatScreen> {
       return aTemp ? 1 : -1;
     }
     return a.id.compareTo(b.id);
+  }
+
+  bool _shouldShowTimestamp(int index) {
+    if (index <= 0) return true;
+    final current = _messages[index].createdAt;
+    final previous = _messages[index - 1].createdAt;
+    if (current == null || previous == null) return true;
+    return current.difference(previous).abs() >= const Duration(minutes: 5);
+  }
+
+  String _formatTimestamp(DateTime? time) {
+    if (time == null) return '';
+    return DateFormat('HH:mm').format(time.toLocal());
   }
 
   void _dropLocalPreviewIfRemoteReady(ChatMessage message) {
@@ -1017,6 +1031,9 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         actions: [
           PopupMenuButton<_ChatAction>(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             onSelected: _handleChatAction,
             itemBuilder: (context) => const [
               PopupMenuItem(
@@ -1056,20 +1073,48 @@ class _ChatScreenState extends State<ChatScreen> {
                     itemBuilder: (context, index) {
                       final message = _messages[index];
                       final isMine = message.senderId == myId;
-                      return MessageBubble(
-                        message: message,
-                        isMine: isMine,
-                        myName: myName,
-                        peerName: peerName,
-                        myAvatarUrl: myAvatarUrl,
-                        peerAvatarUrl: peerAvatarUrl,
-                        onPlayVideo: _openPlayer,
-                        onPreviewImage: _openImagePreview,
-                        onOpenDynamicPhoto: _openDynamicPhoto,
-                        localCoverBytes:
-                            _localCoverBytesByMessageId[message.id],
-                        localCoverPath:
-                            _localCoverPathByMessageId[message.id],
+                      return Column(
+                        children: [
+                          if (_shouldShowTimestamp(index))
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE5E7EB),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    _formatTimestamp(message.createdAt),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF6B7280),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          MessageBubble(
+                            message: message,
+                            isMine: isMine,
+                            myName: myName,
+                            peerName: peerName,
+                            myAvatarUrl: myAvatarUrl,
+                            peerAvatarUrl: peerAvatarUrl,
+                            onPlayVideo: _openPlayer,
+                            onPreviewImage: _openImagePreview,
+                            onOpenDynamicPhoto: _openDynamicPhoto,
+                            localCoverBytes:
+                                _localCoverBytesByMessageId[message.id],
+                            localCoverPath:
+                                _localCoverPathByMessageId[message.id],
+                          ),
+                        ],
                       );
                     },
                   ),
@@ -1077,43 +1122,66 @@ class _ChatScreenState extends State<ChatScreen> {
           SafeArea(
             top: false,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: const Color(0xFFF8FAFC),
                 border: Border(
                   top: BorderSide(color: Colors.grey.shade200),
                 ),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  IconButton(
-                    onPressed: _sending ? null : _showAttachMenu,
-                    icon: const Icon(Icons.add_circle_outline),
+                  Container(
+                    margin: const EdgeInsets.only(right: 8, bottom: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: IconButton(
+                      onPressed: _sending ? null : _showAttachMenu,
+                      icon: const Icon(Icons.add_rounded),
+                    ),
                   ),
                   Expanded(
-                    child: TextField(
-                      controller: _textCtrl,
-                      minLines: 1,
-                      maxLines: 5,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _sendText(),
-                      decoration: const InputDecoration(
-                        hintText: 'Type a message',
-                        border: OutlineInputBorder(),
-                        isDense: true,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: TextField(
+                        controller: _textCtrl,
+                        minLines: 1,
+                        maxLines: 5,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _sendText(),
+                        decoration: const InputDecoration(
+                          hintText: 'Type a message',
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _sending ? null : _sendText,
-                    child: _sending
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Send'),
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 2),
+                    child: FilledButton(
+                      onPressed: _sending ? null : _sendText,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(54, 54),
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                      child: const Icon(Icons.arrow_upward_rounded),
+                    ),
                   ),
                 ],
               ),

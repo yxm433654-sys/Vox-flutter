@@ -92,6 +92,24 @@ class AppState extends ChangeNotifier {
     return f;
   }
 
+  Future<UserProfile?> findUserByUsername(String username) async {
+    final trimmed = username.trim();
+    if (trimmed.isEmpty) return null;
+    for (final user in _userCache.values) {
+      if (user.username == trimmed) {
+        return user;
+      }
+    }
+    try {
+      final user = await auth.getUserByUsername(trimmed);
+      _userCache[user.userId] = user;
+      notifyListeners();
+      return user;
+    } catch (_) {
+      return null;
+    }
+  }
+
   void clearUnread(int peerId) {
     if (!_unreadByPeer.containsKey(peerId)) return;
     _unreadByPeer.remove(peerId);

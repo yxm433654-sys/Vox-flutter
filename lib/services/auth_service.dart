@@ -58,4 +58,16 @@ class AuthService {
     }
     return UserProfile.fromJson(res.data);
   }
+
+  Future<UserProfile> getUserByUsername(String username) async {
+    final res = await _api.get<Object?>(
+      '/api/user/search',
+      query: {'username': username},
+      decode: (raw) => raw,
+    );
+    if (!res.success) {
+      throw Exception(res.message ?? 'Search user failed');
+    }
+    return UserProfile.fromJson(res.data);
+  }
 }

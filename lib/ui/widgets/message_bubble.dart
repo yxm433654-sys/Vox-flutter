@@ -7,7 +7,6 @@ import 'package:dynamic_photo_chat_flutter/models/chat_media.dart';
 import 'package:dynamic_photo_chat_flutter/models/message.dart';
 import 'package:dynamic_photo_chat_flutter/state/app_state.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -40,18 +39,29 @@ class MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mediaWidth = math.min(MediaQuery.of(context).size.width * 0.5, 240.0);
-    final maxMediaHeight =
-        math.min(MediaQuery.of(context).size.height * 0.36, 260.0);
-    final bubble = _buildContent(context, mediaWidth, maxMediaHeight);
-    final time = message.createdAt == null
-        ? ''
-        : DateFormat('HH:mm').format(message.createdAt!.toLocal());
+    final mq = MediaQuery.of(context);
+    final mediaWidth = math.min(mq.size.width * 0.44, 220.0);
+    final maxMediaHeight = math.min(mq.size.height * 0.32, 220.0);
+    final status = (message.status ?? '').toUpperCase();
+    final bubble = _content(context, mediaWidth, maxMediaHeight);
 
     final avatar = _Avatar(
       name: isMine ? myName : peerName,
       avatarUrl: isMine ? myAvatarUrl : peerAvatarUrl,
       seed: message.senderId,
+    );
+
+    final bubbleColumn = Column(
+      crossAxisAlignment:
+          isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        bubble,
+        if (status == 'SENDING')
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: _InlineStatus(label: 'Sending...'),
+          ),
+      ],
     );
 
     return Padding(
@@ -62,85 +72,64 @@ class MessageBubble extends StatelessWidget {
             isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: isMine
             ? [
-                Text(
-                  time,
-                  style:
-                      const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
-                ),
-                const SizedBox(width: 6),
-                bubble,
+                bubbleColumn,
                 const SizedBox(width: 8),
                 avatar,
               ]
             : [
                 avatar,
                 const SizedBox(width: 8),
-                bubble,
-                const SizedBox(width: 6),
-                Text(
-                  time,
-                  style:
-                      const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
-                ),
+                bubbleColumn,
               ],
       ),
     );
   }
 
-  Widget _buildContent(
-    BuildContext context,
-    double mediaWidth,
-    double maxMediaHeight,
-  ) {
+  Widget _content(BuildContext context, double mediaWidth, double maxMediaHeight) {
     final type = message.type.toUpperCase();
     final media = message.media;
 
     if (type == 'TEXT') {
       return _TextBubble(text: message.content ?? '', isMine: isMine);
     }
-
     if (type == 'IMAGE') {
-      return _buildImageBubble(context, mediaWidth, maxMediaHeight, media);
+      return _imageBubble(context, mediaWidth, maxMediaHeight, media);
     }
-
     if (type == 'VIDEO') {
-      return _buildVideoBubble(context, mediaWidth, maxMediaHeight, media);
+      return _videoBubble(context, mediaWidth, maxMediaHeight, media);
     }
-
     if (type == 'DYNAMIC_PHOTO') {
-      return _buildDynamicBubble(context, mediaWidth, maxMediaHeight, media);
+      return _dynamicBubble(context, mediaWidth, maxMediaHeight, media);
     }
-
     return _TextBubble(text: message.content ?? type, isMine: isMine);
   }
 
-  Widget _buildImageBubble(
+  Widget _imageBubble(
     BuildContext context,
     double mediaWidth,
     double maxMediaHeight,
     ChatMedia? media,
   ) {
-    final aspectRatio = _resolveAspectRatio(media, fallback: 1.0);
     final size = _mediaFrameSize(
       mediaWidth: mediaWidth,
       maxMediaHeight: maxMediaHeight,
-      aspectRatio: aspectRatio,
+      aspectRatio: _resolveAspectRatio(media, fallback: 1.0),
     );
-    final imageUrl = media?.coverUrl ?? message.coverUrl;
+    final url = media?.coverUrl ?? message.coverUrl;
 
     return GestureDetector(
-      onTap: imageUrl == null || imageUrl.trim().isEmpty
+      onTap: url == null || url.trim().isEmpty
           ? null
-          : () => onPreviewImage(_resolveUrl(context, imageUrl)),
+          : () => onPreviewImage(_resolveUrl(context, url)),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: SizedBox(
           width: size.width,
           height: size.height,
-          child: _mediaSurface(
-            child: _buildPreviewImage(
+          child: _surface(
+            child: _buildMediaImage(
               context: context,
-              url: imageUrl,
+              url: url,
               fit: BoxFit.cover,
             ),
           ),
@@ -149,19 +138,20 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildVideoBubble(
+  Widget _videoBubble(
     BuildContext context,
     double mediaWidth,
     double maxMediaHeight,
     ChatMedia? media,
   ) {
-    final aspectRatio = _resolveAspectRatio(media, fallback: 16 / 9);
     final size = _mediaFrameSize(
       mediaWidth: mediaWidth,
       maxMediaHeight: maxMediaHeight,
-      aspectRatio: aspectRatio,
+      aspectRatio: _resolveAspectRatio(media, fallback: 16 / 9),
     );
+    final coverUrl = media?.coverUrl ?? message.coverUrl;
     final videoUrl = media?.playUrl ?? message.videoUrl;
+    final processing = (media?.processingStatus ?? '').toUpperCase() == 'PROCESSING';
 
     return GestureDetector(
       onTap: videoUrl == null || videoUrl.trim().isEmpty
@@ -175,21 +165,21 @@ class MessageBubble extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _mediaSurface(
-                child: _buildPreviewImage(
+              _surface(
+                child: _buildMediaImage(
                   context: context,
-                  url: media?.coverUrl ?? message.coverUrl,
+                  url: coverUrl,
                   fit: BoxFit.cover,
                 ),
               ),
-              _buildDarkOverlay(),
-              const Center(child: _PlayButton()),
-              if ((media?.processingStatus ?? '').toUpperCase() == 'PROCESSING')
+              _shade(),
+              const Center(child: _PlayBadge()),
+              if (processing)
                 const Positioned(
                   left: 10,
                   right: 10,
                   bottom: 10,
-                  child: _StatusPill(text: 'Processing'),
+                  child: _InlineStatus(label: 'Processing'),
                 ),
             ],
           ),
@@ -198,20 +188,20 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildDynamicBubble(
+  Widget _dynamicBubble(
     BuildContext context,
     double mediaWidth,
     double maxMediaHeight,
     ChatMedia? media,
   ) {
-    final aspectRatio = _resolveAspectRatio(media, fallback: 3 / 4);
     final size = _mediaFrameSize(
       mediaWidth: mediaWidth,
       maxMediaHeight: maxMediaHeight,
-      aspectRatio: aspectRatio,
+      aspectRatio: _resolveAspectRatio(media, fallback: 3 / 4),
     );
     final coverUrl = media?.coverUrl ?? message.coverUrl;
     final videoUrl = media?.playUrl ?? message.videoUrl;
+    final processing = (media?.processingStatus ?? '').toUpperCase() == 'PROCESSING';
 
     return GestureDetector(
       onTap: videoUrl == null || videoUrl.trim().isEmpty
@@ -230,25 +220,24 @@ class MessageBubble extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _mediaSurface(
-                child: _buildPreviewImage(
+              _surface(
+                child: _buildMediaImage(
                   context: context,
                   url: coverUrl,
                   fit: BoxFit.cover,
                 ),
               ),
-              _buildDarkOverlay(),
+              _shade(),
               const Positioned(
-                left: 10,
                 top: 10,
+                left: 10,
                 child: _LiveBadge(),
               ),
-              if ((media?.processingStatus ?? '').toUpperCase() == 'PROCESSING')
-                const Center(
-                  child: _StatusPill(text: 'Preparing'),
-                )
-              else
-                const Center(child: _PlayButton()),
+              Center(
+                child: processing
+                    ? const _InlineStatus(label: 'Preparing')
+                    : const _PlayBadge(),
+              ),
             ],
           ),
         ),
@@ -256,7 +245,7 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildPreviewImage({
+  Widget _buildMediaImage({
     required BuildContext context,
     required String? url,
     required BoxFit fit,
@@ -268,43 +257,33 @@ class MessageBubble extends StatelessWidget {
       return Image.file(File(localCoverPath!), fit: fit);
     }
     if (url == null || url.trim().isEmpty) {
-      return const _PlaceholderArtwork();
+      return const _NeutralPlaceholder();
     }
     return CachedNetworkImage(
       imageUrl: _resolveUrl(context, url),
       fit: fit,
-      fadeInDuration: const Duration(milliseconds: 140),
-      fadeOutDuration: const Duration(milliseconds: 120),
-      placeholder: (_, __) => const _PlaceholderArtwork(),
-      errorWidget: (_, __, ___) => const _PlaceholderArtwork(),
+      fadeInDuration: const Duration(milliseconds: 120),
+      placeholder: (_, __) => const _NeutralPlaceholder(),
+      errorWidget: (_, __, ___) => const _NeutralPlaceholder(),
     );
   }
 
-  Widget _mediaSurface({required Widget child}) {
+  Widget _surface({required Widget child}) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF1F2937),
-            Color(0xFF111827),
-          ],
-        ),
-      ),
+      decoration: const BoxDecoration(color: Color(0xFFF3F4F6)),
       child: child,
     );
   }
 
-  Widget _buildDarkOverlay() {
+  Widget _shade() {
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.black.withOpacity(0.08),
-            Colors.black.withOpacity(0.28),
+            Colors.black.withOpacity(0.04),
+            Colors.black.withOpacity(0.22),
           ],
         ),
       ),
@@ -316,7 +295,7 @@ class MessageBubble extends StatelessWidget {
     required double maxMediaHeight,
     required double aspectRatio,
   }) {
-    final safeRatio = aspectRatio.isFinite && aspectRatio > 0 ? aspectRatio : 1;
+    final safeRatio = aspectRatio.isFinite && aspectRatio > 0 ? aspectRatio : 1.0;
     var width = mediaWidth;
     var height = width / safeRatio;
     if (height > maxMediaHeight) {
@@ -364,7 +343,7 @@ class _TextBubble extends StatelessWidget {
         : Border.all(color: const Color(0xFFE5E7EB));
     return ConstrainedBox(
       constraints: BoxConstraints(
-        maxWidth: math.min(MediaQuery.of(context).size.width * 0.7, 320.0),
+        maxWidth: math.min(MediaQuery.of(context).size.width * 0.68, 320.0),
       ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -393,7 +372,15 @@ class _Avatar extends StatelessWidget {
   final String? avatarUrl;
   final int seed;
 
-  Color _color() {
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = name.trim();
+    if (avatarUrl != null && avatarUrl!.isNotEmpty) {
+      return CircleAvatar(
+        radius: 18,
+        backgroundImage: NetworkImage(avatarUrl!),
+      );
+    }
     final colors = <Color>[
       const Color(0xFF3B82F6),
       const Color(0xFF10B981),
@@ -401,89 +388,58 @@ class _Avatar extends StatelessWidget {
       const Color(0xFF8B5CF6),
       const Color(0xFFEF4444),
     ];
-    return colors[seed.abs() % colors.length];
-  }
-
-  String _initial() {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty) return '?';
-    return trimmed.characters.first;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final url = avatarUrl;
-    if (url != null && url.isNotEmpty) {
-      return CircleAvatar(
-        radius: 18,
-        backgroundImage: NetworkImage(url),
-        backgroundColor: const Color(0xFFE5E7EB),
-      );
-    }
     return CircleAvatar(
       radius: 18,
-      backgroundColor: _color(),
+      backgroundColor: colors[seed.abs() % colors.length],
       child: Text(
-        _initial(),
+        trimmed.isEmpty ? '?' : trimmed.characters.first,
         style: const TextStyle(
           color: Colors.white,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
   }
 }
 
-class _PlaceholderArtwork extends StatelessWidget {
-  const _PlaceholderArtwork();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF1E293B),
-            Color(0xFF0F172A),
-            Color(0xFF1D4ED8),
-          ],
-        ),
-      ),
-      child: Center(
-        child: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.14),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(
-            Icons.image_outlined,
-            color: Colors.white,
-            size: 22,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PlayButton extends StatelessWidget {
-  const _PlayButton();
+class _NeutralPlaceholder extends StatelessWidget {
+  const _NeutralPlaceholder();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 50,
-      height: 50,
+      color: const Color(0xFFF3F4F6),
+      alignment: Alignment.center,
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE5E7EB),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: const Icon(
+          Icons.photo_outlined,
+          color: Color(0xFF6B7280),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlayBadge extends StatelessWidget {
+  const _PlayBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.34),
         shape: BoxShape.circle,
       ),
       child: const Icon(
-        Icons.play_arrow,
+        Icons.play_arrow_rounded,
         color: Colors.white,
         size: 30,
       ),
@@ -491,21 +447,21 @@ class _PlayButton extends StatelessWidget {
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.text});
+class _InlineStatus extends StatelessWidget {
+  const _InlineStatus({required this.label});
 
-  final String text;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.44),
+        color: Colors.black.withOpacity(0.5),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        text,
+        label,
         style: const TextStyle(
           color: Colors.white,
           fontSize: 12,
