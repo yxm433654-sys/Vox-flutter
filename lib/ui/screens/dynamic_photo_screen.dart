@@ -131,13 +131,13 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
                         children: [
                           Image.network(
                             widget.coverUrl,
-                            fit: BoxFit.cover,
+                            fit: BoxFit.contain,
                             errorBuilder: (_, __, ___) =>
                                 const ColoredBox(color: Colors.black12),
                           ),
                           if (hasVideo)
                             FittedBox(
-                              fit: BoxFit.cover,
+                              fit: BoxFit.contain,
                               child: SizedBox(
                                 width: c.value.size.width,
                                 height: c.value.size.height,

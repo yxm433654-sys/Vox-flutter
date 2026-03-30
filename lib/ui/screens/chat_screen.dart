@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
+import 'package:video_player/video_player.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.peerId});
@@ -31,6 +32,10 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<ChatMessage> _messages = [];
   final Set<int> _coverRefreshing = <int>{};
   static const int _maxConcurrentCoverRefresh = 2;
+  final Map<int, double> _videoCoverWaitProgress = <int, double>{};
+  final Map<int, double> _videoAspectRatios = <int, double>{};
+  final Set<int> _aspectRatioRefreshing = <int>{};
+  static const int _maxConcurrentAspectRefresh = 2;
   StreamSubscription<ChatMessage>? _msgSub;
   bool _loading = true;
   bool _sending = false;
@@ -89,6 +94,7 @@ class _ChatScreenState extends State<ChatScreen> {
           .toList();
       for (final m in pendingVideos) {
         _maybeRefreshVideoCover(m);
+        _maybeInferVideoAspectRatio(m);
       }
     } catch (e) {
       _error = _toUserError(e);
@@ -127,6 +133,7 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       });
       _maybeRefreshVideoCover(m);
+      _maybeInferVideoAspectRatio(m);
       if (m.senderId == widget.peerId) {
         state.clearUnread(widget.peerId);
         await _markAllRead(myId);
@@ -672,12 +679,18 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _refreshVideoCover(
       {required int messageId, required int coverId}) async {
     final state = context.read<AppState>();
+    if (!mounted) return;
+    setState(() => _videoCoverWaitProgress[messageId] = 0);
     for (var i = 0; i < 20; i++) {
       // 前几轮 400ms 快速探测，避免首帧已就绪仍等满 2s；之后 1s 降低请求频率
       await Future<void>.delayed(
         Duration(milliseconds: i < 8 ? 400 : 1000),
       );
       if (!mounted) return;
+      final p = i / 19.0; // 0..1
+      setState(() {
+        _videoCoverWaitProgress[messageId] = p;
+      });
       try {
         final info = await state.files.preview(fileId: coverId);
         final st = (info.sourceType ?? '').toUpperCase();
@@ -703,11 +716,66 @@ class _ChatScreenState extends State<ChatScreen> {
               status: old.status,
               createdAt: old.createdAt,
             );
+            _videoCoverWaitProgress.remove(messageId);
           });
           return;
         }
       } catch (_) {}
     }
+    if (mounted) {
+      setState(() => _videoCoverWaitProgress.remove(messageId));
+    }
+  }
+
+  void _maybeInferVideoAspectRatio(ChatMessage m) {
+    if ((m.type).toUpperCase() != 'VIDEO') return;
+    // 只有在封面缺失占位时才需要推导宽高比，避免重复初始化视频。
+    final cover = m.coverUrl;
+    if (cover != null && cover.isNotEmpty) return;
+    if (m.videoUrl == null || m.videoUrl!.isEmpty) return;
+    if (_videoAspectRatios.containsKey(m.id)) return;
+    if (_aspectRatioRefreshing.contains(m.id)) return;
+    if (_aspectRatioRefreshing.length >= _maxConcurrentAspectRefresh) return;
+
+    _aspectRatioRefreshing.add(m.id);
+    _inferVideoAspectRatio(messageId: m.id, videoUrl: m.videoUrl!).whenComplete(
+      () {
+        _aspectRatioRefreshing.remove(m.id);
+      },
+    );
+  }
+
+  Future<void> _inferVideoAspectRatio({
+    required int messageId,
+    required String videoUrl,
+  }) async {
+    try {
+      final state = context.read<AppState>();
+      final resolved = _resolveUrl(videoUrl, state.apiBaseUrl);
+      final controller = VideoPlayerController.networkUrl(Uri.parse(resolved));
+      try {
+        await controller.initialize();
+        final ar = controller.value.aspectRatio;
+        if (!mounted) return;
+        if (ar > 0 && ar.isFinite) {
+          setState(() => _videoAspectRatios[messageId] = ar);
+        }
+      } finally {
+        await controller.dispose();
+      }
+    } catch (_) {
+      // ignore: aspect ratio inference is best-effort.
+    }
+  }
+
+  String _resolveUrl(String url, String apiBaseUrl) {
+    final parsed = Uri.tryParse(url);
+    if (parsed != null && parsed.hasScheme) {
+      return url;
+    }
+    final base = Uri.parse(apiBaseUrl);
+    final path = url.startsWith('/') ? url : '/$url';
+    return base.replace(path: path, query: null, fragment: null).toString();
   }
 
   void _openPlayer(String url) {
@@ -806,6 +874,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           onPlayVideo: _openPlayer,
                           onPreviewImage: _openImagePreview,
                           onOpenDynamicPhoto: _openDynamicPhoto,
+                          videoCoverWaitProgress:
+                              _videoCoverWaitProgress[m.id],
+                          videoAspectRatio: _videoAspectRatios[m.id],
                         ),
                       );
                     },

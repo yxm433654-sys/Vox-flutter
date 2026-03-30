@@ -18,6 +18,8 @@ class MessageBubble extends StatelessWidget {
     required this.onPlayVideo,
     required this.onPreviewImage,
     required this.onOpenDynamicPhoto,
+    this.videoCoverWaitProgress,
+    this.videoAspectRatio,
   });
 
   final ChatMessage message;
@@ -29,6 +31,8 @@ class MessageBubble extends StatelessWidget {
   final void Function(String url) onPlayVideo;
   final void Function(String url) onPreviewImage;
   final void Function(String coverUrl, String videoUrl) onOpenDynamicPhoto;
+  final double? videoCoverWaitProgress;
+  final double? videoAspectRatio;
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +93,6 @@ class MessageBubble extends StatelessWidget {
       BuildContext context, double mediaWidth, double maxMediaHeight) {
     final dpr = MediaQuery.of(context).devicePixelRatio;
     final cacheW = math.max(1, (mediaWidth * dpr).round());
-    final cacheH = math.max(1, (maxMediaHeight * dpr).round());
     final t = message.type.toUpperCase();
     if (t == 'TEXT') {
       return _TextBubble(text: message.content ?? '', isMine: isMine);
@@ -108,15 +111,9 @@ class MessageBubble extends StatelessWidget {
               maxWidth: mediaWidth,
               maxHeight: maxMediaHeight,
             ),
-            child: Image.network(
-              resolved,
-              fit: BoxFit.contain,
-              alignment: Alignment.center,
+            child: _networkImageWithProgress(
+              url: resolved,
               cacheWidth: cacheW,
-              cacheHeight: cacheH,
-              filterQuality: FilterQuality.low,
-              errorBuilder: (_, __, ___) =>
-                  const ColoredBox(color: Colors.black12),
             ),
           ),
         ),
@@ -137,6 +134,8 @@ class MessageBubble extends StatelessWidget {
             video == null || video.isEmpty ? null : _resolveUrl(context, video),
         coverUrl:
             cover == null || cover.isEmpty ? null : _resolveUrl(context, cover),
+        coverWaitProgress: videoCoverWaitProgress,
+        videoAspectRatio: videoAspectRatio,
       );
     }
 
@@ -162,15 +161,9 @@ class MessageBubble extends StatelessWidget {
               clipBehavior: Clip.hardEdge,
               alignment: Alignment.center,
               children: [
-                Image.network(
-                  resolvedCover,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.center,
+                _networkImageWithProgress(
+                  url: resolvedCover,
                   cacheWidth: cacheW,
-                  cacheHeight: cacheH,
-                  filterQuality: FilterQuality.low,
-                  errorBuilder: (_, __, ___) =>
-                      const ColoredBox(color: Colors.black12),
                 ),
                 const Positioned(
                   right: 6,
@@ -196,6 +189,8 @@ class MessageBubble extends StatelessWidget {
     required double maxMediaHeight,
     required String? videoUrl,
     required String? coverUrl,
+    required double? coverWaitProgress,
+    required double? videoAspectRatio,
   }) {
     return GestureDetector(
       onTap: videoUrl == null ? null : () => onPlayVideo(videoUrl),
@@ -211,21 +206,24 @@ class MessageBubble extends StatelessWidget {
             alignment: Alignment.center,
             children: [
               if (coverUrl == null)
-                SizedBox(
-                  width: mediaWidth,
-                  height: math.min(mediaWidth * 9 / 16, maxMediaHeight),
-                  child: const ColoredBox(color: Colors.black12),
-                )
+                Builder(builder: (_) {
+                  // 占位期间封面不存在：用视频宽高比推导出等比占位尺寸，避免“比例被写死导致看起来变形”。
+                  final ar = videoAspectRatio ?? 9 / 16;
+                  final preferredH = mediaWidth / ar;
+                  final actualH =
+                      preferredH <= maxMediaHeight ? preferredH : maxMediaHeight;
+                  final actualW = actualH * ar;
+
+                  return SizedBox(
+                    width: actualW,
+                    height: actualH,
+                    child: const ColoredBox(color: Colors.black12),
+                  );
+                })
               else
-                Image.network(
-                  coverUrl,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.center,
+                _networkImageWithProgress(
+                  url: coverUrl,
                   cacheWidth: mediaWidth.round(),
-                  cacheHeight: maxMediaHeight.round(),
-                  filterQuality: FilterQuality.low,
-                  errorBuilder: (_, __, ___) =>
-                      const ColoredBox(color: Colors.black12),
                 ),
               Center(
                 child: Container(
@@ -239,10 +237,99 @@ class MessageBubble extends StatelessWidget {
                       color: Colors.white, size: 28),
                 ),
               ),
+              if (coverUrl == null)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: SizedBox(
+                    width: 68,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        LinearProgressIndicator(
+                          value: coverWaitProgress?.clamp(0, 1),
+                          minHeight: 4,
+                          backgroundColor: Colors.black12,
+                        ),
+                        if (coverWaitProgress != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              '${(coverWaitProgress * 100).clamp(0, 100).round()}%',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF6B7280),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _networkImageWithProgress({
+    required String url,
+    required int cacheWidth,
+  }) {
+    return Image.network(
+      url,
+      fit: BoxFit.contain,
+      alignment: Alignment.center,
+      // 只设置 cacheWidth，避免 cacheWidth+cacheHeight 同时设定导致解码尺寸被拉伸。
+      cacheWidth: cacheWidth,
+      filterQuality: FilterQuality.low,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+
+        final expected = loadingProgress.expectedTotalBytes;
+        final loaded = loadingProgress.cumulativeBytesLoaded;
+        final value =
+            (expected != null && expected > 0) ? loaded / expected : null;
+        final pct = value == null ? null : (value * 100).clamp(0, 100);
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            const ColoredBox(color: Colors.black12),
+            child,
+            Positioned(
+              left: 8,
+              right: 8,
+              bottom: 10,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LinearProgressIndicator(
+                    value: value,
+                    minHeight: 3,
+                    backgroundColor: Colors.black12,
+                  ),
+                  if (pct != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        '${pct.round()}%',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF6B7280),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+      errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12),
     );
   }
 
