@@ -2,6 +2,8 @@
 import 'dart:typed_data';
 import 'package:dynamic_photo_chat_flutter/models/file_upload_response.dart';
 import 'package:dynamic_photo_chat_flutter/models/message.dart';
+import 'package:dynamic_photo_chat_flutter/services/dynamic_media_detector.dart';
+import 'package:dynamic_photo_chat_flutter/services/dynamic_media_upload_service.dart';
 import 'package:dynamic_photo_chat_flutter/state/app_state.dart';
 import 'package:dynamic_photo_chat_flutter/ui/chat/chat_composer.dart';
 import 'package:dynamic_photo_chat_flutter/ui/chat/chat_local_message_factory.dart';
@@ -9,7 +11,6 @@ import 'package:dynamic_photo_chat_flutter/ui/chat/chat_message_list.dart';
 import 'package:dynamic_photo_chat_flutter/ui/chat/chat_media_navigator.dart';
 import 'package:dynamic_photo_chat_flutter/ui/chat/chat_media_picker.dart';
 import 'package:dynamic_photo_chat_flutter/ui/chat/chat_media_sender.dart';
-import 'package:dynamic_photo_chat_flutter/utils/live_photo_detector.dart';
 import 'package:dynamic_photo_chat_flutter/utils/media_downloader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -36,6 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final Map<int, Uint8List> _localCoverBytesByMessageId = <int, Uint8List>{};
   final Map<int, String> _localCoverPathByMessageId = <int, String>{};
   ChatMediaNavigator? _chatMediaNavigator;
+  final DynamicMediaDetector _dynamicMediaDetector = const DynamicMediaDetector();
 
   StreamSubscription<ChatMessage>? _msgSub;
   bool _loading = true;
@@ -485,6 +487,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _pickGalleryLivePhoto() async {
+    final appState = context.read<AppState>();
     final asset = await ChatMediaPicker.pickAsset(
       context: context,
       mode: ChatAssetPickerMode.livePhoto,
@@ -496,33 +499,16 @@ class _ChatScreenState extends State<ChatScreen> {
       const ThumbnailSize(512, 512),
     );
 
-    final live = await LivePhotoDetector.detectLivePhoto(asset);
-    if (live != null) {
-      await _sendDynamicPhoto(
-        coverPath: live.imagePath,
-        previewBytes: previewBytes,
-        upload: (userId) => context.read<AppState>().files.uploadLivePhotoAuto(
-              jpegPath: live.imagePath,
-              movPath: live.videoPath,
-              userId: userId,
-            ),
-      );
-      return;
-    }
-
-    final file = await asset.file;
-    if (file == null) {
+    final picked = await _dynamicMediaDetector.detect(asset);
+    if (picked == null) {
       _showSnack('Unable to read the selected live photo.');
       return;
     }
-
+    final uploader = DynamicMediaUploadService(appState.files);
     await _sendDynamicPhoto(
-      coverPath: file.path,
+      coverPath: picked.coverPath,
       previewBytes: previewBytes,
-      upload: (userId) => context.read<AppState>().files.uploadMotionPhotoFromPath(
-            filePath: file.path,
-            userId: userId,
-          ),
+      upload: (userId) => uploader.upload(pickResult: picked, userId: userId),
     );
   }
 
