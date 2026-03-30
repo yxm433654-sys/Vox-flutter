@@ -11,11 +11,13 @@ class DynamicPhotoScreen extends StatefulWidget {
     super.key,
     required this.coverUrl,
     required this.videoUrl,
+    this.initialAspectRatio,
     this.title,
   });
 
   final String coverUrl;
   final String videoUrl;
+  final double? initialAspectRatio;
   final String? title;
 
   @override
@@ -35,6 +37,10 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
   @override
   void initState() {
     super.initState();
+    final ratio = widget.initialAspectRatio;
+    if (ratio != null && ratio.isFinite && ratio > 0) {
+      _aspectRatio = ratio;
+    }
     unawaited(_ensureController());
   }
 
@@ -69,7 +75,7 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
 
       final controller = VideoPlayerController.file(downloaded.file);
       await controller.initialize();
-      await controller.setLooping(true);
+      await controller.setLooping(false);
       await controller.setVolume(1.0);
       final ratio = controller.value.aspectRatio;
       if (ratio.isFinite && ratio > 0) {
@@ -169,11 +175,12 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
                             )
                           else
                             const _DetailPlaceholder(),
-                          const Positioned(
-                            top: 12,
-                            left: 12,
-                            child: _LiveCornerBadge(),
-                          ),
+                          if (!_showVideo)
+                            const Positioned(
+                              top: 12,
+                              left: 12,
+                              child: _LiveBadge(),
+                            ),
                           if (_showVideo &&
                               controller != null &&
                               controller.value.isInitialized)
@@ -306,8 +313,8 @@ class _DetailPlaceholder extends StatelessWidget {
   }
 }
 
-class _LiveCornerBadge extends StatelessWidget {
-  const _LiveCornerBadge();
+class _LiveBadge extends StatelessWidget {
+  const _LiveBadge();
 
   @override
   Widget build(BuildContext context) {
@@ -317,14 +324,24 @@ class _LiveCornerBadge extends StatelessWidget {
         color: Colors.black.withOpacity(0.38),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: const Text(
-        'LIVE',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.3,
-        ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 4,
+            backgroundColor: Color(0xFFFF4D4F),
+          ),
+          SizedBox(width: 4),
+          Text(
+            'LIVE',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
       ),
     );
   }

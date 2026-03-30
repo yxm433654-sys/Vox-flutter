@@ -34,7 +34,8 @@ class MessageBubble extends StatelessWidget {
   final String? peerAvatarUrl;
   final void Function(String url) onPlayVideo;
   final void Function(String url) onPreviewImage;
-  final Future<void> Function(String coverUrl, String videoUrl) onOpenDynamicPhoto;
+  final Future<void> Function(String coverUrl, String videoUrl, double aspectRatio)
+      onOpenDynamicPhoto;
   final Uint8List? localCoverBytes;
   final String? localCoverPath;
 
@@ -204,6 +205,7 @@ class MessageBubble extends StatelessWidget {
                       ? ''
                       : _resolveUrl(context, coverUrl),
                   _resolveUrl(context, videoUrl),
+                  _resolveAspectRatio(media, fallback: 3 / 4),
                 ),
               );
             },

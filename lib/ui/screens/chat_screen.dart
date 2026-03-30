@@ -30,6 +30,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _textCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
+  final FocusNode _textFocusNode = FocusNode();
   final GlobalKey _moreButtonKey = GlobalKey();
 
   final List<ChatMessage> _messages = <ChatMessage>[];
@@ -43,6 +44,7 @@ class _ChatScreenState extends State<ChatScreen> {
   int _lastMessageId = 0;
   bool _userAtBottom = true;
   int _tempMessageSeed = -1;
+  bool _showEmojiPanel = false;
 
   @override
   void initState() {
@@ -55,6 +57,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _msgSub?.cancel();
     _textCtrl.dispose();
+    _textFocusNode.dispose();
     _scrollCtrl.removeListener(_onScroll);
     _scrollCtrl.dispose();
     super.dispose();
@@ -192,6 +195,28 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
+    );
+  }
+
+  void _toggleEmojiPanel() {
+    setState(() => _showEmojiPanel = !_showEmojiPanel);
+    if (_showEmojiPanel) {
+      _textFocusNode.unfocus();
+    } else {
+      _textFocusNode.requestFocus();
+    }
+  }
+
+  void _appendEmoji(String emoji) {
+    final value = _textCtrl.value;
+    final selection = value.selection;
+    final start = selection.isValid ? selection.start : value.text.length;
+    final end = selection.isValid ? selection.end : value.text.length;
+    final nextText = value.text.replaceRange(start, end, emoji);
+    final caret = start + emoji.length;
+    _textCtrl.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: caret),
     );
   }
 
@@ -761,7 +786,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return null;
     }
 
-    final rawAssets = await paths.first.getAssetListPaged(page: 0, size: 180);
+    final rawAssets = await paths.first.getAssetListPaged(page: 0, size: 96);
     final assets = await _filterAssetsForMode(rawAssets, mode);
     if (assets.isEmpty) {
       if (!mounted) return null;
@@ -834,9 +859,20 @@ class _ChatScreenState extends State<ChatScreen> {
       return assets.where((asset) => asset.type == AssetType.video).toList();
     }
 
+    final imageAssets =
+        assets.where((asset) => asset.type == AssetType.image).toList();
+    if (Platform.isIOS) {
+      return imageAssets.where((asset) {
+        final isLive = asset.isLivePhoto;
+        return mode == _AssetPickerMode.livePhoto ? isLive : !isLive;
+      }).toList();
+    }
+    if (Platform.isAndroid && mode == _AssetPickerMode.image) {
+      return imageAssets;
+    }
+
     final filtered = <AssetEntity>[];
-    for (final asset in assets) {
-      if (asset.type != AssetType.image) continue;
+    for (final asset in imageAssets.take(90)) {
       final isDynamic = await _isDynamicAsset(asset);
       if (mode == _AssetPickerMode.livePhoto && isDynamic) {
         filtered.add(asset);
@@ -876,7 +912,11 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Future<void> _openDynamicPhoto(String coverUrl, String videoUrl) async {
+  Future<void> _openDynamicPhoto(
+    String coverUrl,
+    String videoUrl,
+    double aspectRatio,
+  ) async {
     final navigator = Navigator.of(context);
     final rootNavigator = Navigator.of(context, rootNavigator: true);
     final progress = ValueNotifier<double?>(null);
@@ -922,8 +962,11 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) return;
     navigator.push(
       MaterialPageRoute(
-        builder: (_) =>
-            DynamicPhotoScreen(coverUrl: coverUrl, videoUrl: videoUrl),
+        builder: (_) => DynamicPhotoScreen(
+          coverUrl: coverUrl,
+          videoUrl: videoUrl,
+          initialAspectRatio: aspectRatio,
+        ),
       ),
     );
   }
@@ -1234,67 +1277,119 @@ class _ChatScreenState extends State<ChatScreen> {
           SafeArea(
             top: false,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
                 border: Border(
                   top: BorderSide(color: Colors.grey.shade200),
                 ),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    margin: const EdgeInsets.only(right: 8, bottom: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: IconButton(
-                      onPressed: _sending ? null : _showAttachMenu,
-                      icon: const Icon(Icons.add_rounded),
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _ComposerIconButton(
+                        icon: Icons.add_rounded,
+                        onTap: _sending ? null : _showAttachMenu,
+                      ),
+                      const SizedBox(width: 8),
+                      _ComposerIconButton(
+                        icon: Icons.sentiment_satisfied_alt_rounded,
+                        onTap: _toggleEmojiPanel,
+                        active: _showEmojiPanel,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x0F111827),
+                                blurRadius: 12,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: TextField(
+                            controller: _textCtrl,
+                            focusNode: _textFocusNode,
+                            minLines: 1,
+                            maxLines: 5,
+                            textInputAction: TextInputAction.send,
+                            onTap: () {
+                              if (_showEmojiPanel) {
+                                setState(() => _showEmojiPanel = false);
+                              }
+                            },
+                            onSubmitted: (_) => _sendText(),
+                            decoration: const InputDecoration(
+                              hintText: 'Type a message',
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: _sending ? null : _sendText,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(52, 52),
+                          padding: EdgeInsets.zero,
+                          backgroundColor: const Color(0xFF10B981),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                        child: const Icon(Icons.arrow_upward_rounded),
+                      ),
+                    ],
                   ),
-                  Expanded(
-                    child: Container(
+                  if (_showEmojiPanel) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: const Color(0xFFE5E7EB)),
                       ),
-                      child: TextField(
-                        controller: _textCtrl,
-                        minLines: 1,
-                        maxLines: 5,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => _sendText(),
-                        decoration: const InputDecoration(
-                          hintText: 'Type a message',
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                        ),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _emojiSet
+                            .map(
+                              (emoji) => InkWell(
+                                borderRadius: BorderRadius.circular(14),
+                                onTap: () => _appendEmoji(emoji),
+                                child: Container(
+                                  width: 42,
+                                  height: 42,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Text(
+                                    emoji,
+                                    style: const TextStyle(fontSize: 24),
+                                  ),
+                                ),
+                              ),
+                            )
+                            .toList(),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 2),
-                    child: FilledButton(
-                      onPressed: _sending ? null : _sendText,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(54, 54),
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      ),
-                      child: const Icon(Icons.arrow_upward_rounded),
-                    ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -1321,6 +1416,29 @@ enum _ChatAction {
   clearConversation,
   clearCache,
 }
+
+const List<String> _emojiSet = <String>[
+  '😀',
+  '😁',
+  '😂',
+  '🤣',
+  '🥹',
+  '😍',
+  '😘',
+  '😎',
+  '🤔',
+  '😭',
+  '😡',
+  '👍',
+  '👏',
+  '🙏',
+  '🎉',
+  '❤️',
+  '🔥',
+  '🌹',
+  '🍀',
+  '🐶',
+];
 
 class _AttachTile extends StatelessWidget {
   const _AttachTile({
@@ -1370,6 +1488,38 @@ class _AttachTile extends StatelessWidget {
   }
 }
 
+class _ComposerIconButton extends StatelessWidget {
+  const _ComposerIconButton({
+    required this.icon,
+    required this.onTap,
+    this.active = false,
+  });
+
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: active ? const Color(0xFFE0F2FE) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: active ? const Color(0xFF7DD3FC) : const Color(0xFFE5E7EB),
+        ),
+      ),
+      child: IconButton(
+        onPressed: onTap,
+        icon: Icon(
+          icon,
+          color: active ? const Color(0xFF0284C7) : const Color(0xFF374151),
+        ),
+      ),
+    );
+  }
+}
+
 class _AssetThumbnail extends StatelessWidget {
   const _AssetThumbnail({required this.asset});
 
@@ -1378,7 +1528,7 @@ class _AssetThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Uint8List?>(
-      future: asset.thumbnailDataWithSize(const ThumbnailSize(280, 280)),
+      future: asset.thumbnailDataWithSize(const ThumbnailSize(220, 220)),
       builder: (_, snapshot) {
         final data = snapshot.data;
         if (data == null) {
@@ -1427,14 +1577,24 @@ class _AssetLiveBadge extends StatelessWidget {
         color: Colors.black.withOpacity(0.42),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: const Text(
-        'LIVE',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.3,
-        ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 3.5,
+            backgroundColor: Color(0xFFFF4D4F),
+          ),
+          SizedBox(width: 4),
+          Text(
+            'LIVE',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
       ),
     );
   }
