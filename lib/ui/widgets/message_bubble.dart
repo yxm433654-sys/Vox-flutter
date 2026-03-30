@@ -40,10 +40,10 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
-    final mediaWidth = math.min(mq.size.width * 0.44, 220.0);
-    final maxMediaHeight = math.min(mq.size.height * 0.32, 220.0);
-    final status = (message.status ?? '').toUpperCase();
+    final mediaWidth = math.min(mq.size.width * 0.43, 210.0);
+    final maxMediaHeight = math.min(mq.size.height * 0.30, 210.0);
     final bubble = _content(context, mediaWidth, maxMediaHeight);
+    final status = (message.status ?? '').toUpperCase();
 
     final avatar = _Avatar(
       name: isMine ? myName : peerName,
@@ -51,7 +51,7 @@ class MessageBubble extends StatelessWidget {
       seed: message.senderId,
     );
 
-    final bubbleColumn = Column(
+    final column = Column(
       crossAxisAlignment:
           isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
@@ -67,19 +67,19 @@ class MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment:
             isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: isMine
             ? [
-                bubbleColumn,
+                Flexible(child: column),
                 const SizedBox(width: 8),
                 avatar,
               ]
             : [
                 avatar,
                 const SizedBox(width: 8),
-                bubbleColumn,
+                Flexible(child: column),
               ],
       ),
     );
@@ -116,7 +116,6 @@ class MessageBubble extends StatelessWidget {
       aspectRatio: _resolveAspectRatio(media, fallback: 1.0),
     );
     final url = media?.coverUrl ?? message.coverUrl;
-
     return GestureDetector(
       onTap: url == null || url.trim().isEmpty
           ? null
@@ -126,12 +125,10 @@ class MessageBubble extends StatelessWidget {
         child: SizedBox(
           width: size.width,
           height: size.height,
-          child: _surface(
-            child: _buildMediaImage(
-              context: context,
-              url: url,
-              fit: BoxFit.cover,
-            ),
+          child: _buildMediaImage(
+            context: context,
+            url: url,
+            fit: BoxFit.contain,
           ),
         ),
       ),
@@ -165,22 +162,15 @@ class MessageBubble extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _surface(
-                child: _buildMediaImage(
-                  context: context,
-                  url: coverUrl,
-                  fit: BoxFit.cover,
-                ),
+              _buildMediaImage(
+                context: context,
+                url: coverUrl,
+                fit: BoxFit.contain,
               ),
-              _shade(),
-              const Center(child: _PlayBadge()),
               if (processing)
-                const Positioned(
-                  left: 10,
-                  right: 10,
-                  bottom: 10,
-                  child: _InlineStatus(label: 'Processing'),
-                ),
+                const Center(child: _InlineStatus(label: 'Processing'))
+              else
+                const Center(child: _PlayBadge()),
             ],
           ),
         ),
@@ -213,31 +203,25 @@ class MessageBubble extends StatelessWidget {
                 _resolveUrl(context, videoUrl),
               ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         child: SizedBox(
           width: size.width,
           height: size.height,
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _surface(
-                child: _buildMediaImage(
-                  context: context,
-                  url: coverUrl,
-                  fit: BoxFit.cover,
-                ),
+              _buildMediaImage(
+                context: context,
+                url: coverUrl,
+                fit: BoxFit.contain,
               ),
-              _shade(),
               const Positioned(
-                top: 10,
-                left: 10,
+                top: 8,
+                left: 8,
                 child: _LiveBadge(),
               ),
-              Center(
-                child: processing
-                    ? const _InlineStatus(label: 'Preparing')
-                    : const _PlayBadge(),
-              ),
+              if (processing)
+                const Center(child: _InlineStatus(label: 'Preparing')),
             ],
           ),
         ),
@@ -251,41 +235,31 @@ class MessageBubble extends StatelessWidget {
     required BoxFit fit,
   }) {
     if (localCoverBytes != null) {
-      return Image.memory(localCoverBytes!, fit: fit);
+      return Container(
+        color: const Color(0xFFF3F4F6),
+        alignment: Alignment.center,
+        child: Image.memory(localCoverBytes!, fit: fit),
+      );
     }
     if (localCoverPath != null && localCoverPath!.trim().isNotEmpty) {
-      return Image.file(File(localCoverPath!), fit: fit);
+      return Container(
+        color: const Color(0xFFF3F4F6),
+        alignment: Alignment.center,
+        child: Image.file(File(localCoverPath!), fit: fit),
+      );
     }
     if (url == null || url.trim().isEmpty) {
       return const _NeutralPlaceholder();
     }
-    return CachedNetworkImage(
-      imageUrl: _resolveUrl(context, url),
-      fit: fit,
-      fadeInDuration: const Duration(milliseconds: 120),
-      placeholder: (_, __) => const _NeutralPlaceholder(),
-      errorWidget: (_, __, ___) => const _NeutralPlaceholder(),
-    );
-  }
-
-  Widget _surface({required Widget child}) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFFF3F4F6)),
-      child: child,
-    );
-  }
-
-  Widget _shade() {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.black.withOpacity(0.04),
-            Colors.black.withOpacity(0.22),
-          ],
-        ),
+    return Container(
+      color: const Color(0xFFF3F4F6),
+      alignment: Alignment.center,
+      child: CachedNetworkImage(
+        imageUrl: _resolveUrl(context, url),
+        fit: fit,
+        fadeInDuration: const Duration(milliseconds: 120),
+        placeholder: (_, __) => const _NeutralPlaceholder(),
+        errorWidget: (_, __, ___) => const _NeutralPlaceholder(),
       ),
     );
   }
@@ -432,16 +406,16 @@ class _PlayBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 48,
-      height: 48,
+      width: 44,
+      height: 44,
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.34),
+        color: Colors.black.withOpacity(0.36),
         shape: BoxShape.circle,
       ),
       child: const Icon(
         Icons.play_arrow_rounded,
         color: Colors.white,
-        size: 30,
+        size: 28,
       ),
     );
   }

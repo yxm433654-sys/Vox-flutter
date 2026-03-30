@@ -6,13 +6,13 @@ import 'package:dynamic_photo_chat_flutter/models/file_upload_response.dart';
 import 'package:dynamic_photo_chat_flutter/models/message.dart';
 import 'package:dynamic_photo_chat_flutter/state/app_state.dart';
 import 'package:dynamic_photo_chat_flutter/ui/screens/dynamic_photo_screen.dart';
+import 'package:dynamic_photo_chat_flutter/ui/screens/image_preview_screen.dart';
 import 'package:dynamic_photo_chat_flutter/ui/screens/video_player_screen.dart';
 import 'package:dynamic_photo_chat_flutter/ui/widgets/message_bubble.dart';
 import 'package:dynamic_photo_chat_flutter/utils/live_photo_detector.dart';
 import 'package:dynamic_photo_chat_flutter/utils/media_downloader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
@@ -29,7 +29,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _textCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
-  final ImagePicker _picker = ImagePicker();
+  final GlobalKey _moreButtonKey = GlobalKey();
 
   final List<ChatMessage> _messages = <ChatMessage>[];
   final Map<int, Uint8List> _localCoverBytesByMessageId = <int, Uint8List>{};
@@ -666,18 +666,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _pickCameraImage() async {
-    final file = await _picker.pickImage(source: ImageSource.camera);
-    if (file == null) return;
-    await _sendImageFromPath(filePath: file.path);
-  }
-
-  Future<void> _pickCameraVideo() async {
-    final file = await _picker.pickVideo(source: ImageSource.camera);
-    if (file == null) return;
-    await _sendVideoFromPath(filePath: file.path);
-  }
-
   Future<void> _pickGalleryImage() async {
     final asset = await _pickAsset(AssetType.image);
     if (asset == null) return;
@@ -854,6 +842,48 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _showChatActionsSheet() async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final button =
+        _moreButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    if (overlay == null || button == null) return;
+    final topLeft = button.localToGlobal(Offset.zero, ancestor: overlay);
+    final bottomRight =
+        button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay);
+    final action = await showMenu<_ChatAction>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        topLeft.dx,
+        bottomRight.dy + 8,
+        overlay.size.width - bottomRight.dx,
+        overlay.size.height - topLeft.dy,
+      ),
+      color: Colors.white,
+      elevation: 12,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      items: const [
+        PopupMenuItem(
+          value: _ChatAction.clearConversation,
+          child: _MenuActionRow(
+            icon: Icons.delete_sweep_outlined,
+            label: 'Clear chat history',
+          ),
+        ),
+        PopupMenuItem(
+          value: _ChatAction.clearCache,
+          child: _MenuActionRow(
+            icon: Icons.cleaning_services_outlined,
+            label: 'Clear cache',
+          ),
+        ),
+      ],
+    );
+    if (action != null) {
+      await _handleChatAction(action);
+    }
+  }
+
   Future<void> _clearConversation() async {
     final state = context.read<AppState>();
     final session = state.session;
@@ -911,40 +941,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _openImagePreview(String url) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => Dialog.fullscreen(
-        child: Stack(
-          children: [
-            Container(
-              color: Colors.black,
-              alignment: Alignment.center,
-              child: InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 4,
-                child: Image.network(
-                  url,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Center(
-                    child: Text(
-                      'Image failed to load.',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            SafeArea(
-              child: Align(
-                alignment: Alignment.topRight,
-                child: IconButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  icon: const Icon(Icons.close, color: Colors.white),
-                ),
-              ),
-            ),
-          ],
-        ),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ImagePreviewScreen(url: url),
       ),
     );
   }
@@ -952,34 +951,57 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _showAttachMenu() async {
     final action = await showModalBottomSheet<_AttachAction>(
       context: context,
-      showDragHandle: true,
+      backgroundColor: const Color(0xFFF7F8FA),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
       builder: (sheetContext) {
         return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Gallery Photo'),
-                onTap: () => Navigator.of(sheetContext).pop(_AttachAction.galleryImage),
-              ),
-              ListTile(
-                leading: const Icon(Icons.videocam_outlined),
-                title: const Text('Gallery Video'),
-                onTap: () => Navigator.of(sheetContext).pop(_AttachAction.galleryVideo),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Camera Photo'),
-                onTap: () => Navigator.of(sheetContext).pop(_AttachAction.cameraImage),
-              ),
-              ListTile(
-                leading: const Icon(Icons.video_call_outlined),
-                title: const Text('Camera Video'),
-                onTap: () => Navigator.of(sheetContext).pop(_AttachAction.cameraVideo),
-              ),
-              const SizedBox(height: 8),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Send Media',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _AttachTile(
+                      icon: Icons.image_outlined,
+                      label: 'Image',
+                      color: const Color(0xFFE0F2FE),
+                      iconColor: const Color(0xFF0284C7),
+                      onTap: () =>
+                          Navigator.of(sheetContext).pop(_AttachAction.galleryImage),
+                    ),
+                    _AttachTile(
+                      icon: Icons.smart_display_outlined,
+                      label: 'Video',
+                      color: const Color(0xFFDCFCE7),
+                      iconColor: const Color(0xFF16A34A),
+                      onTap: () =>
+                          Navigator.of(sheetContext).pop(_AttachAction.galleryVideo),
+                    ),
+                    _AttachTile(
+                      icon: Icons.motion_photos_on_outlined,
+                      label: 'Live Photo',
+                      color: const Color(0xFFFCE7F3),
+                      iconColor: const Color(0xFFDB2777),
+                      onTap: () =>
+                          Navigator.of(sheetContext).pop(_AttachAction.livePhoto),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -992,11 +1014,8 @@ class _ChatScreenState extends State<ChatScreen> {
       case _AttachAction.galleryVideo:
         await _pickGalleryVideo();
         break;
-      case _AttachAction.cameraImage:
-        await _pickCameraImage();
-        break;
-      case _AttachAction.cameraVideo:
-        await _pickCameraVideo();
+      case _AttachAction.livePhoto:
+        await _pickGalleryImage();
         break;
       case null:
         break;
@@ -1015,36 +1034,32 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        centerTitle: true,
+        title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(peerName),
-            Text(
-              'ID ${widget.peerId}',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: Colors.black54),
+            CircleAvatar(
+              radius: 16,
+              backgroundImage:
+                  peerAvatarUrl == null ? null : NetworkImage(peerAvatarUrl),
+              child: peerAvatarUrl == null
+                  ? Text(peerName.trim().isEmpty ? '?' : peerName.characters.first)
+                  : null,
+            ),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                peerName,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
         actions: [
-          PopupMenuButton<_ChatAction>(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            onSelected: _handleChatAction,
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: _ChatAction.clearConversation,
-                child: Text('Clear chat history'),
-              ),
-              PopupMenuItem(
-                value: _ChatAction.clearCache,
-                child: Text('Clear cache'),
-              ),
-            ],
+          IconButton(
+            key: _moreButtonKey,
+            onPressed: _showChatActionsSheet,
+            icon: const Icon(Icons.more_horiz_rounded),
           ),
         ],
       ),
@@ -1196,11 +1211,79 @@ class _ChatScreenState extends State<ChatScreen> {
 enum _AttachAction {
   galleryImage,
   galleryVideo,
-  cameraImage,
-  cameraVideo,
+  livePhoto,
 }
 
 enum _ChatAction {
   clearConversation,
   clearCache,
+}
+
+class _AttachTile extends StatelessWidget {
+  const _AttachTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: SizedBox(
+        width: 92,
+        child: Column(
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(icon, color: iconColor, size: 30),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuActionRow extends StatelessWidget {
+  const _MenuActionRow({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF111827)),
+        const SizedBox(width: 10),
+        Text(label),
+      ],
+    );
+  }
 }

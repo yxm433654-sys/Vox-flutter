@@ -61,7 +61,7 @@ class AuthService {
 
   Future<UserProfile> getUserByUsername(String username) async {
     final res = await _api.get<Object?>(
-      '/api/user/search',
+      '/api/user/by-username',
       query: {'username': username},
       decode: (raw) => raw,
     );

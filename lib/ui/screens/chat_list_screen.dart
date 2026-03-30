@@ -12,11 +12,42 @@ class ChatListScreen extends StatefulWidget {
 }
 
 class _ChatListScreenState extends State<ChatListScreen> {
+  final GlobalKey _menuButtonKey = GlobalKey();
+
   Future<void> _addPeer() async {
     final controller = TextEditingController();
     UserProfile? foundUser;
     String? error;
     bool searching = false;
+    Future<void> runSearch(StateSetter setInnerState) async {
+      final username = controller.text.trim();
+      if (username.isEmpty) {
+        setInnerState(() {
+          foundUser = null;
+          error = 'Please enter a username.';
+        });
+        return;
+      }
+      final session = context.read<AppState>().session;
+      if (session != null && session.username == username) {
+        setInnerState(() {
+          foundUser = null;
+          error = 'You cannot add yourself.';
+        });
+        return;
+      }
+      setInnerState(() {
+        searching = true;
+        error = null;
+        foundUser = null;
+      });
+      final user = await context.read<AppState>().findUserByUsername(username);
+      setInnerState(() {
+        searching = false;
+        foundUser = user;
+        error = user == null ? 'User not found.' : null;
+      });
+    }
 
     final selectedUser = await showDialog<UserProfile>(
       context: context,
@@ -36,21 +67,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     hintText: 'Search by username',
                     prefixIcon: Icon(Icons.search),
                   ),
-                  onSubmitted: (_) async {
-                    setInnerState(() {
-                      searching = true;
-                      error = null;
-                      foundUser = null;
-                    });
-                    final user = await context
-                        .read<AppState>()
-                        .findUserByUsername(controller.text.trim());
-                    setInnerState(() {
-                      searching = false;
-                      foundUser = user;
-                      error = user == null ? 'User not found.' : null;
-                    });
-                  },
+                  onSubmitted: (_) => runSearch(setInnerState),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonal(
+                    onPressed: searching ? null : () => runSearch(setInnerState),
+                    child: const Text('Search'),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 if (searching)
@@ -177,27 +202,57 @@ class _ChatListScreenState extends State<ChatListScreen> {
             onPressed: _addPeer,
             icon: const Icon(Icons.person_add_alt_1_rounded),
           ),
-          PopupMenuButton<String>(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            onSelected: (value) async {
+          IconButton(
+            key: _menuButtonKey,
+            onPressed: () async {
+              final overlay =
+                  Overlay.of(context).context.findRenderObject() as RenderBox?;
+              final button = _menuButtonKey.currentContext?.findRenderObject()
+                  as RenderBox?;
+              if (overlay == null || button == null) return;
+              final topLeft =
+                  button.localToGlobal(Offset.zero, ancestor: overlay);
+              final bottomRight = button.localToGlobal(
+                button.size.bottomRight(Offset.zero),
+                ancestor: overlay,
+              );
+              final value = await showMenu<String>(
+                context: context,
+                position: RelativeRect.fromLTRB(
+                  topLeft.dx,
+                  bottomRight.dy + 8,
+                  overlay.size.width - bottomRight.dx,
+                  overlay.size.height - topLeft.dy,
+                ),
+                color: Colors.white,
+                elevation: 12,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                items: const [
+                  PopupMenuItem<String>(
+                    value: 'add',
+                    child: _ConversationMenuRow(
+                      icon: Icons.person_add_alt_1_outlined,
+                      label: 'Add conversation',
+                    ),
+                  ),
+                  PopupMenuItem<String>(
+                    value: 'logout',
+                    child: _ConversationMenuRow(
+                      icon: Icons.logout_rounded,
+                      label: 'Log out',
+                    ),
+                  ),
+                ],
+              );
               if (value == 'add') {
                 await _addPeer();
               } else if (value == 'logout') {
                 await state.logout();
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem<String>(
-                value: 'add',
-                child: Text('Add conversation'),
-              ),
-              PopupMenuItem<String>(
-                value: 'logout',
-                child: Text('Log out'),
-              ),
-            ],
+            icon: const Icon(Icons.more_horiz_rounded),
           ),
         ],
       ),
@@ -425,6 +480,27 @@ class _EmptyConversationState extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ConversationMenuRow extends StatelessWidget {
+  const _ConversationMenuRow({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF111827)),
+        const SizedBox(width: 10),
+        Text(label),
+      ],
     );
   }
 }

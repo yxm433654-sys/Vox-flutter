@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:dynamic_photo_chat_flutter/utils/media_downloader.dart';
+import 'package:dynamic_photo_chat_flutter/utils/media_saver.dart';
+import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 class VideoPlayerScreen extends StatefulWidget {
@@ -37,23 +38,26 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       final downloaded = await MediaDownloader.downloadToCacheFile(
         url: widget.url,
         extensionHint: 'mp4',
-        onProgress: (r, t) {
+        onProgress: (received, total) {
           if (!mounted) return;
           setState(() {
-            _received = r;
-            _total = t;
+            _received = received;
+            _total = total;
           });
         },
       );
 
       final controller = VideoPlayerController.file(downloaded.file);
-      _controller = controller;
       await controller.initialize();
       await controller.setLooping(true);
       await controller.play();
-      if (mounted) setState(() => _loading = false);
+      _controller = controller;
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      _error = e.toString();
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -68,59 +72,162 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     final progress = (_total == null || _total == 0)
         ? null
         : (_received / _total!).clamp(0.0, 1.0);
+    final controller = _controller;
+
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title ?? '视频')),
-      body: Center(
-        child: _error != null
-            ? Text(_error!)
-            : _loading || _controller == null
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 220,
-                        child: LinearProgressIndicator(value: progress),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        progress == null
-                            ? '正在下载...'
-                            : '正在下载... ${(progress * 100).round()}%',
-                        style: const TextStyle(color: Color(0xFF6B7280)),
-                      ),
-                    ],
-                  )
-                : AspectRatio(
-                    aspectRatio: _controller!.value.aspectRatio == 0
-                        ? 16 / 9
-                        : _controller!.value.aspectRatio,
-                    child: Stack(
-                      children: [
-                        VideoPlayer(_controller!),
-                        Align(
-                          alignment: Alignment.bottomCenter,
-                          child: VideoProgressIndicator(_controller!,
-                              allowScrubbing: true),
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _VideoDetailTopBar(
+              title: widget.title ?? 'Video',
+              onSave: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  await MediaSaver.saveVideoFromUrl(widget.url, title: widget.title);
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Saved to local album.')),
+                  );
+                } catch (e) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text(e.toString())),
+                  );
+                }
+              },
+            ),
+            Expanded(
+              child: Center(
+                child: _error != null
+                    ? Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white),
                         ),
-                        Center(
-                          child: IconButton.filledTonal(
-                            onPressed: () async {
-                              if (_controller == null) return;
-                              if (_controller!.value.isPlaying) {
-                                await _controller!.pause();
-                              } else {
-                                await _controller!.play();
-                              }
-                              if (mounted) setState(() {});
-                            },
-                            icon: Icon(_controller!.value.isPlaying
-                                ? Icons.pause
-                                : Icons.play_arrow),
+                      )
+                    : _loading || controller == null
+                        ? SizedBox(
+                            width: 220,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                LinearProgressIndicator(value: progress),
+                                const SizedBox(height: 12),
+                                Text(
+                                  progress == null
+                                      ? 'Loading video...'
+                                      : 'Loading video... ${(progress * 100).round()}%',
+                                  style: const TextStyle(color: Colors.white70),
+                                ),
+                              ],
+                            ),
+                          )
+                        : AspectRatio(
+                            aspectRatio: controller.value.aspectRatio == 0
+                                ? 16 / 9
+                                : controller.value.aspectRatio,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                FittedBox(
+                                  fit: BoxFit.contain,
+                                  child: SizedBox(
+                                    width: controller.value.size.width,
+                                    height: controller.value.size.height,
+                                    child: VideoPlayer(controller),
+                                  ),
+                                ),
+                                Center(
+                                  child: Container(
+                                    width: 56,
+                                    height: 56,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.36),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: IconButton(
+                                      onPressed: () async {
+                                        if (controller.value.isPlaying) {
+                                          await controller.pause();
+                                        } else {
+                                          await controller.play();
+                                        }
+                                        if (mounted) {
+                                          setState(() {});
+                                        }
+                                      },
+                                      icon: Icon(
+                                        controller.value.isPlaying
+                                            ? Icons.pause_rounded
+                                            : Icons.play_arrow_rounded,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+              ),
+            ),
+            if (controller != null && controller.value.isInitialized)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
+                child: VideoProgressIndicator(
+                  controller,
+                  allowScrubbing: true,
+                  colors: const VideoProgressColors(
+                    playedColor: Colors.white,
+                    bufferedColor: Colors.white38,
+                    backgroundColor: Colors.white12,
                   ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoDetailTopBar extends StatelessWidget {
+  const _VideoDetailTopBar({
+    required this.title,
+    required this.onSave,
+  });
+
+  final String title;
+  final Future<void> Function() onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            color: Colors.white,
+          ),
+          Expanded(
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: onSave,
+            icon: const Icon(Icons.download_rounded),
+            color: Colors.white,
+          ),
+        ],
       ),
     );
   }
