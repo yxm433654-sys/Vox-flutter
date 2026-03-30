@@ -183,80 +183,77 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
                       scale: _holding ? 0.985 : 1.0,
                       child: AspectRatio(
                         aspectRatio: _aspectRatio,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(24),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Container(color: const Color(0xFF111111)),
-                              if (widget.coverUrl.trim().isNotEmpty)
-                                Image.network(
-                                  widget.coverUrl,
-                                  fit: BoxFit.cover,
-                                  gaplessPlayback: true,
-                                  errorBuilder: (_, __, ___) =>
-                                      const _DetailPlaceholder(),
-                                )
-                              else
-                                const _DetailPlaceholder(),
-                              if (!_showVideo)
-                                const Positioned(
-                                  top: 12,
-                                  left: 12,
-                                  child: _LiveBadge(),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Container(color: const Color(0xFF111111)),
+                            if (widget.coverUrl.trim().isNotEmpty)
+                              Image.network(
+                                widget.coverUrl,
+                                fit: BoxFit.contain,
+                                gaplessPlayback: true,
+                                errorBuilder: (_, __, ___) =>
+                                    const _DetailPlaceholder(),
+                              )
+                            else
+                              const _DetailPlaceholder(),
+                            if (!_showVideo)
+                              const Positioned(
+                                top: 12,
+                                left: 12,
+                                child: _LiveBadge(),
+                              ),
+                            if (_showVideo &&
+                                controller != null &&
+                                controller.value.isInitialized)
+                              FittedBox(
+                                fit: BoxFit.contain,
+                                child: SizedBox(
+                                  width: controller.value.size.width,
+                                  height: controller.value.size.height,
+                                  child: VideoPlayer(controller),
                                 ),
-                              if (_showVideo &&
-                                  controller != null &&
-                                  controller.value.isInitialized)
-                                FittedBox(
-                                  fit: BoxFit.cover,
+                              ),
+                            if (_loading)
+                              Positioned.fill(
+                                child: Container(
+                                  color: Colors.black.withOpacity(0.18),
+                                  alignment: Alignment.center,
                                   child: SizedBox(
-                                    width: controller.value.size.width,
-                                    height: controller.value.size.height,
-                                    child: VideoPlayer(controller),
-                                  ),
-                                ),
-                              if (_loading)
-                                Positioned.fill(
-                                  child: Container(
-                                    color: Colors.black.withOpacity(0.18),
-                                    alignment: Alignment.center,
-                                    child: SizedBox(
-                                      width: 220,
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          LinearProgressIndicator(value: progress),
-                                          const SizedBox(height: 12),
-                                          Text(
-                                            progress == null
-                                                ? '正在加载 Live Photo...'
-                                                : '正在加载 Live Photo... ${(progress * 100).round()}%',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w600,
-                                            ),
+                                    width: 220,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        LinearProgressIndicator(value: progress),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          progress == null
+                                              ? '正在加载 Live Photo...'
+                                              : '正在加载 Live Photo... ${(progress * 100).round()}%',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
                                           ),
-                                        ],
-                                      ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
-                              if (_error != null)
-                                Positioned.fill(
-                                  child: Container(
-                                    color: Colors.black.withOpacity(0.26),
-                                    alignment: Alignment.center,
-                                    padding: const EdgeInsets.all(24),
-                                    child: Text(
-                                      _error!,
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(color: Colors.white),
-                                    ),
+                              ),
+                            if (_error != null)
+                              Positioned.fill(
+                                child: Container(
+                                  color: Colors.black.withOpacity(0.26),
+                                  alignment: Alignment.center,
+                                  padding: const EdgeInsets.all(24),
+                                  child: Text(
+                                    _error!,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Colors.white),
                                   ),
                                 ),
-                            ],
-                          ),
+                              ),
+                          ],
                         ),
                       ),
                     ),
