@@ -26,7 +26,8 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
   bool _initing = false;
   String? _error;
   double _aspectRatio = 3 / 4;
-  bool _downloading = true;
+  bool _downloading = false;
+  bool _downloadStarted = false;
   int _received = 0;
   int? _total;
 
@@ -38,9 +39,9 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
 
   Future<void> _ensureController() async {
     if (_controller != null) return;
-    final downloaded = await MediaDownloader.downloadToTempFile(
+    final downloaded = await MediaDownloader.downloadToCacheFile(
       url: widget.videoUrl,
-      filenameHint: 'live_${widget.videoUrl.hashCode}.mp4',
+      extensionHint: 'mp4',
       onProgress: (r, t) {
         if (!mounted) return;
         setState(() {
@@ -82,6 +83,14 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
     _initing = true;
     try {
       await HapticFeedback.selectionClick();
+      if (mounted && _controller == null) {
+        setState(() {
+          _downloadStarted = true;
+          _downloading = true;
+          _received = 0;
+          _total = null;
+        });
+      }
       await _ensureController();
       if (!mounted) return;
       // 初始化过程中如果用户松手，则不继续 seek/play。
@@ -95,6 +104,9 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
+      if (mounted) {
+        setState(() => _downloading = false);
+      }
       _initing = false;
     }
   }
@@ -158,7 +170,7 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
                             errorBuilder: (_, __, ___) =>
                                 const ColoredBox(color: Colors.black12),
                           ),
-                          if (_downloading)
+                          if (_downloadStarted && _downloading)
                             Positioned.fill(
                               child: Container(
                                 color: Colors.black.withOpacity(0.15),

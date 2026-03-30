@@ -9,6 +9,7 @@ import 'package:dynamic_photo_chat_flutter/ui/screens/dynamic_photo_screen.dart'
 import 'package:dynamic_photo_chat_flutter/ui/screens/video_player_screen.dart';
 import 'package:dynamic_photo_chat_flutter/ui/widgets/message_bubble.dart';
 import 'package:dynamic_photo_chat_flutter/utils/live_photo_detector.dart';
+import 'package:dynamic_photo_chat_flutter/utils/media_downloader.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -565,23 +566,33 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
 
-    // 统一使用 PhotoManager 选择视频，拿到系统提供的缩略图用于“发送端本地占位”
-    final asset = await _pickVideoAsset();
-    if (asset == null || !mounted) return;
+    // 优先使用系统视频选择器（筛选稳定），失败再回落到 PhotoManager 网格。
+    AssetEntity? asset;
+    XFile? picked;
+    try {
+      picked = await _picker.pickVideo(source: ImageSource.gallery);
+    } catch (_) {}
+    if (picked == null) {
+      asset = await _pickVideoAsset();
+    }
+    if ((picked == null && asset == null) || !mounted) return;
 
     final state = context.read<AppState>();
     final session = state.session!;
 
     try {
-      final file = await asset.file;
-      if (file == null) {
-        throw Exception('无法读取视频文件');
+      final String filePath;
+      Uint8List? thumb;
+      if (picked != null) {
+        filePath = picked.path;
+      } else {
+        final f = await asset!.file;
+        if (f == null) throw Exception('无法读取视频文件');
+        filePath = f.path;
+        thumb = await asset.thumbnailDataWithSize(const ThumbnailSize(420, 420));
       }
-      final thumb = await asset.thumbnailDataWithSize(
-        const ThumbnailSize(420, 420),
-      );
       final uploaded = await state.files.uploadNormalFromXFile(
-        file: XFile(file.path),
+        file: XFile(filePath),
         userId: session.userId,
       );
       await _sendForUploadedNormal(
@@ -960,6 +971,7 @@ class _ChatScreenState extends State<ChatScreen> {
               if (v == 'clear_cache') {
                 // 清理磁盘缓存 + Flutter 图片内存缓存，避免下滑回滚时二次加载。
                 await DefaultCacheManager().emptyCache();
+                await MediaDownloader.clearCache();
                 PaintingBinding.instance.imageCache.clear();
                 PaintingBinding.instance.imageCache.clearLiveImages();
                 if (!mounted) return;

@@ -34,9 +34,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         _total = null;
       });
 
-      final downloaded = await MediaDownloader.downloadToTempFile(
+      final downloaded = await MediaDownloader.downloadToCacheFile(
         url: widget.url,
-        filenameHint: 'video_${widget.url.hashCode}.mp4',
+        extensionHint: 'mp4',
         onProgress: (r, t) {
           if (!mounted) return;
           setState(() {
