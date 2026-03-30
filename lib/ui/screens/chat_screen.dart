@@ -14,6 +14,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key, required this.peerId});
@@ -873,6 +874,31 @@ class _ChatScreenState extends State<ChatScreen> {
         scrolledUnderElevation: 0,
         centerTitle: true,
         title: Text(peerName),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (v) async {
+              final messenger = ScaffoldMessenger.of(context);
+              if (v == 'clear_cache') {
+                // 清理磁盘缓存 + Flutter 图片内存缓存，避免下滑回滚时二次加载。
+                await DefaultCacheManager().emptyCache();
+                PaintingBinding.instance.imageCache.clear();
+                PaintingBinding.instance.imageCache.clearLiveImages();
+                if (!mounted) return;
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('缓存已清除')),
+                );
+                setState(() {});
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'clear_cache',
+                child: Text('清除缓存'),
+              ),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [

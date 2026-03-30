@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dynamic_photo_chat_flutter/models/message.dart';
 import 'package:dynamic_photo_chat_flutter/state/app_state.dart';
 import 'package:flutter/material.dart';
@@ -278,58 +279,21 @@ class MessageBubble extends StatelessWidget {
     required String url,
     required int cacheWidth,
   }) {
-    return Image.network(
-      url,
-      fit: BoxFit.contain,
-      alignment: Alignment.center,
-      // 只设置 cacheWidth，避免 cacheWidth+cacheHeight 同时设定导致解码尺寸被拉伸。
-      cacheWidth: cacheWidth,
-      filterQuality: FilterQuality.low,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-
-        final expected = loadingProgress.expectedTotalBytes;
-        final loaded = loadingProgress.cumulativeBytesLoaded;
-        final value =
-            (expected != null && expected > 0) ? loaded / expected : null;
-        final pct = value == null ? null : (value * 100).clamp(0, 100);
-
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            const ColoredBox(color: Colors.black12),
-            child,
-            Positioned(
-              left: 8,
-              right: 8,
-              bottom: 10,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  LinearProgressIndicator(
-                    value: value,
-                    minHeight: 3,
-                    backgroundColor: Colors.black12,
-                  ),
-                  if (pct != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        '${pct.round()}%',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF6B7280),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
-      errorBuilder: (_, __, ___) => const ColoredBox(color: Colors.black12),
+    // 使用磁盘缓存，避免列表下滑回滚反复重新拉取。
+    // 微信风格：加载中只显示占位，不展示百分比进度条。
+    return CachedNetworkImage(
+      imageUrl: url,
+      memCacheWidth: cacheWidth,
+      fadeInDuration: const Duration(milliseconds: 120),
+      fadeOutDuration: const Duration(milliseconds: 120),
+      imageBuilder: (context, imageProvider) => Image(
+        image: imageProvider,
+        fit: BoxFit.contain,
+        alignment: Alignment.center,
+        filterQuality: FilterQuality.low,
+      ),
+      placeholder: (_, __) => const ColoredBox(color: Colors.black12),
+      errorWidget: (_, __, ___) => const ColoredBox(color: Colors.black12),
     );
   }
 
