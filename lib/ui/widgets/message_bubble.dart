@@ -42,7 +42,7 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
-    final mediaWidth = math.min(mq.size.width * 0.43, 210.0);
+    final mediaWidth = math.min(mq.size.width * 0.48, 230.0);
     final maxMediaHeight = math.min(mq.size.height * 0.30, 210.0);
     final bubble = _content(context, mediaWidth, maxMediaHeight);
     final status = (message.status ?? '').toUpperCase();
@@ -128,7 +128,7 @@ class MessageBubble extends StatelessWidget {
         child: _buildMediaImage(
           context: context,
           url: url,
-          fit: BoxFit.cover,
+          fit: BoxFit.contain,
         ),
       ),
     );
@@ -162,7 +162,7 @@ class MessageBubble extends StatelessWidget {
             _buildMediaImage(
               context: context,
               url: coverUrl,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
             ),
             if (_formatDuration(media?.duration) case final durationLabel?)
               Positioned(
@@ -218,7 +218,7 @@ class MessageBubble extends StatelessWidget {
             _buildMediaImage(
               context: context,
               url: coverUrl,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
             ),
             const Positioned(
               top: 8,
@@ -409,7 +409,10 @@ class _MediaCard extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
-          child: child,
+          child: ColoredBox(
+            color: const Color(0xFFF3F4F6),
+            child: child,
+          ),
         ),
       ),
     );

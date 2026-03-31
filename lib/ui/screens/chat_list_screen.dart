@@ -1,3 +1,4 @@
+import 'package:dynamic_photo_chat_flutter/models/user.dart';
 import 'package:dynamic_photo_chat_flutter/state/app_state.dart';
 import 'package:dynamic_photo_chat_flutter/ui/chat/add_conversation_dialog.dart';
 import 'package:dynamic_photo_chat_flutter/ui/chat/conversation_list_item.dart';
@@ -16,7 +17,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   final GlobalKey _menuButtonKey = GlobalKey();
 
   Future<void> _addConversation() async {
-    final selectedUser = await showDialog(
+    final selectedUser = await showDialog<UserProfile>(
       context: context,
       builder: (_) => const AddConversationDialog(),
     );
@@ -123,6 +124,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
     final state = context.watch<AppState>();
     final session = state.session;
     final username = session?.username ?? '游客';
+    final userId = session?.userId ?? 0;
+    final avatarUrl = session == null ? null : state.avatarUrlFor(userId);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -130,26 +133,49 @@ class _ChatListScreenState extends State<ChatListScreen> {
         backgroundColor: const Color(0xFFF6F7FB),
         scrolledUnderElevation: 0,
         elevation: 0,
-        titleSpacing: 16,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              username,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
+        centerTitle: true,
+        leadingWidth: 180,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Row(
+            children: [
+              avatarUrl == null
+                  ? CircleAvatar(
+                      radius: 18,
+                      backgroundColor: _avatarColor(userId),
+                      child: Text(
+                        _avatarText(username, userId),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                  : CircleAvatar(
+                      radius: 18,
+                      backgroundImage: NetworkImage(avatarUrl),
+                    ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  username,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
-            const Text(
-              '会话',
-              style: TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6B7280),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+            ],
+          ),
+        ),
+        title: const Text(
+          '会话',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         actions: [
           IconButton(
@@ -182,8 +208,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       final peerId = state.peers[index];
                       state.prefetchUser(peerId);
                       final unread = state.unreadCount(peerId);
-                      final name = state.displayNameFor(peerId);
-                      final avatarUrl = state.avatarUrlFor(peerId);
+                      final peerName = state.displayNameFor(peerId);
+                      final peerAvatarUrl = state.avatarUrlFor(peerId);
 
                       return Dismissible(
                         key: ValueKey('peer-$peerId'),
@@ -200,10 +226,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           child: const Icon(Icons.delete_outline, color: Colors.white),
                         ),
                         child: ConversationListItem(
-                          name: name,
-                          avatarLabel: _avatarText(name, peerId),
+                          name: peerName,
+                          avatarLabel: _avatarText(peerName, peerId),
                           avatarColor: _avatarColor(peerId),
-                          avatarUrl: avatarUrl,
+                          avatarUrl: peerAvatarUrl,
                           unreadCount: unread,
                           onTap: () {
                             state.clearUnread(peerId);

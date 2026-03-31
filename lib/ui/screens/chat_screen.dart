@@ -1,6 +1,7 @@
 ﻿import 'dart:async';
 import 'dart:typed_data';
 import 'package:dynamic_photo_chat_flutter/models/file_upload_response.dart';
+import 'package:dynamic_photo_chat_flutter/models/media_draft_metadata.dart';
 import 'package:dynamic_photo_chat_flutter/models/message.dart';
 import 'package:dynamic_photo_chat_flutter/services/dynamic_media_detector.dart';
 import 'package:dynamic_photo_chat_flutter/services/dynamic_media_upload_service.dart';
@@ -425,6 +426,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _sendImageFromPath({
     required String filePath,
     Uint8List? previewBytes,
+    MediaDraftMetadata? metadata,
   }) async {
     final state = context.read<AppState>();
     final session = state.session;
@@ -432,12 +434,14 @@ class _ChatScreenState extends State<ChatScreen> {
     await _mediaSender(state, session.userId).sendImageFromPath(
       filePath: filePath,
       previewBytes: previewBytes,
+      metadata: metadata,
     );
   }
 
   Future<void> _sendVideoFromPath({
     required String filePath,
     Uint8List? previewBytes,
+    MediaDraftMetadata? metadata,
   }) async {
     final state = context.read<AppState>();
     final session = state.session;
@@ -445,6 +449,7 @@ class _ChatScreenState extends State<ChatScreen> {
     await _mediaSender(state, session.userId).sendVideoFromPath(
       filePath: filePath,
       previewBytes: previewBytes,
+      metadata: metadata,
     );
   }
 
@@ -452,6 +457,7 @@ class _ChatScreenState extends State<ChatScreen> {
     required String coverPath,
     Uint8List? previewBytes,
     required Future<FileUploadResponse> Function(int userId) upload,
+    MediaDraftMetadata? metadata,
   }) async {
     final state = context.read<AppState>();
     final session = state.session;
@@ -460,6 +466,7 @@ class _ChatScreenState extends State<ChatScreen> {
       coverPath: coverPath,
       previewBytes: previewBytes,
       upload: upload,
+      metadata: metadata,
     );
   }
 
@@ -470,7 +477,7 @@ class _ChatScreenState extends State<ChatScreen> {
       showSnack: _showSnack,
     );
     if (asset == null) return;
-    final file = await asset.file;
+    final file = await asset.originFile ?? await asset.file;
     if (file == null) {
       _showSnack('无法读取所选图片。');
       return;
@@ -483,6 +490,10 @@ class _ChatScreenState extends State<ChatScreen> {
     await _sendImageFromPath(
       filePath: file.path,
       previewBytes: previewBytes,
+      metadata: MediaDraftMetadata(
+        width: asset.width,
+        height: asset.height,
+      ),
     );
   }
 
@@ -493,7 +504,7 @@ class _ChatScreenState extends State<ChatScreen> {
       showSnack: _showSnack,
     );
     if (asset == null) return;
-    final file = await asset.file;
+    final file = await asset.originFile ?? await asset.file;
     if (file == null) {
       _showSnack('无法读取所选视频。');
       return;
@@ -504,6 +515,11 @@ class _ChatScreenState extends State<ChatScreen> {
     await _sendVideoFromPath(
       filePath: file.path,
       previewBytes: previewBytes,
+      metadata: MediaDraftMetadata(
+        width: asset.width,
+        height: asset.height,
+        durationSeconds: asset.duration.toDouble(),
+      ),
     );
   }
 
@@ -530,6 +546,11 @@ class _ChatScreenState extends State<ChatScreen> {
       coverPath: picked.coverPath,
       previewBytes: previewBytes,
       upload: (userId) => uploader.upload(pickResult: picked, userId: userId),
+      metadata: MediaDraftMetadata(
+        width: asset.width,
+        height: asset.height,
+        durationSeconds: asset.duration.toDouble(),
+      ),
     );
   }
 

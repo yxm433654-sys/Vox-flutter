@@ -51,21 +51,24 @@ class ChatMediaPicker {
                       label: '图片',
                       color: const Color(0xFFE0F2FE),
                       iconColor: const Color(0xFF0284C7),
-                      onTap: () => Navigator.of(sheetContext).pop(ChatAttachAction.galleryImage),
+                      onTap: () =>
+                          Navigator.of(sheetContext).pop(ChatAttachAction.galleryImage),
                     ),
                     _AttachTile(
                       icon: Icons.smart_display_outlined,
                       label: '视频',
                       color: const Color(0xFFDCFCE7),
                       iconColor: const Color(0xFF16A34A),
-                      onTap: () => Navigator.of(sheetContext).pop(ChatAttachAction.galleryVideo),
+                      onTap: () =>
+                          Navigator.of(sheetContext).pop(ChatAttachAction.galleryVideo),
                     ),
                     _AttachTile(
                       icon: Icons.motion_photos_on_outlined,
-                      label: 'Live Photo',
+                      label: '实况',
                       color: const Color(0xFFFCE7F3),
                       iconColor: const Color(0xFFDB2777),
-                      onTap: () => Navigator.of(sheetContext).pop(ChatAttachAction.livePhoto),
+                      onTap: () =>
+                          Navigator.of(sheetContext).pop(ChatAttachAction.livePhoto),
                     ),
                   ],
                 ),
@@ -84,7 +87,7 @@ class ChatMediaPicker {
   }) async {
     final permission = await PhotoManager.requestPermissionExtend();
     if (!permission.isAuth) {
-      showSnack('请先允许访问媒体库');
+      showSnack('请先允许访问媒体库。');
       return null;
     }
 
@@ -101,7 +104,7 @@ class ChatMediaPicker {
       return null;
     }
 
-    final rawAssets = await paths.first.getAssetListPaged(page: 0, size: 96);
+    final rawAssets = await paths.first.getAssetListPaged(page: 0, size: 60);
     final assets = await _filterAssetsForMode(rawAssets, mode);
     if (assets.isEmpty) {
       if (!context.mounted) return null;
@@ -115,7 +118,7 @@ class ChatMediaPicker {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) {
-        final height = MediaQuery.of(sheetContext).size.height * 0.8;
+        final height = MediaQuery.of(sheetContext).size.height * 0.76;
         return SafeArea(
           child: SizedBox(
             height: height,
@@ -182,17 +185,22 @@ class ChatMediaPicker {
         return mode == ChatAssetPickerMode.livePhoto ? isLive : !isLive;
       }).toList();
     }
+
     if (Platform.isAndroid && mode == ChatAssetPickerMode.image) {
       return imageAssets;
     }
 
+    final candidates = imageAssets.take(60).toList();
+    final detected = await Future.wait(
+      candidates.map((asset) async => MapEntry(asset, await _isDynamicAsset(asset))),
+    );
+
     final filtered = <AssetEntity>[];
-    for (final asset in imageAssets.take(90)) {
-      final isDynamic = await _isDynamicAsset(asset);
-      if (mode == ChatAssetPickerMode.livePhoto && isDynamic) {
-        filtered.add(asset);
-      } else if (mode == ChatAssetPickerMode.image && !isDynamic) {
-        filtered.add(asset);
+    for (final entry in detected) {
+      if (mode == ChatAssetPickerMode.livePhoto && entry.value) {
+        filtered.add(entry.key);
+      } else if (mode == ChatAssetPickerMode.image && !entry.value) {
+        filtered.add(entry.key);
       }
     }
     return filtered;
@@ -215,7 +223,7 @@ class ChatMediaPicker {
       case ChatAssetPickerMode.video:
         return '没有找到视频';
       case ChatAssetPickerMode.livePhoto:
-        return '没有找到 Live Photo';
+        return '没有找到实况图片';
     }
   }
 }
@@ -276,7 +284,7 @@ class _AssetThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Uint8List?>(
-      future: asset.thumbnailDataWithSize(const ThumbnailSize(220, 220)),
+      future: asset.thumbnailDataWithSize(const ThumbnailSize(160, 160)),
       builder: (_, snapshot) {
         final data = snapshot.data;
         if (data == null) {

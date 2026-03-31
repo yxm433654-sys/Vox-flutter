@@ -2,9 +2,11 @@ import 'dart:typed_data';
 
 import 'package:dynamic_photo_chat_flutter/models/chat_media.dart';
 import 'package:dynamic_photo_chat_flutter/models/file_upload_response.dart';
+import 'package:dynamic_photo_chat_flutter/models/media_draft_metadata.dart';
 import 'package:dynamic_photo_chat_flutter/models/message.dart';
 import 'package:dynamic_photo_chat_flutter/state/app_state.dart';
 import 'package:dynamic_photo_chat_flutter/ui/chat/chat_local_message_factory.dart';
+import 'package:dynamic_photo_chat_flutter/utils/user_error_message.dart';
 
 class ChatMediaSender {
   ChatMediaSender({
@@ -38,6 +40,7 @@ class ChatMediaSender {
   Future<void> sendImageFromPath({
     required String filePath,
     Uint8List? previewBytes,
+    MediaDraftMetadata? metadata,
   }) async {
     final tempId = nextTempId();
     insertLocalMessage(
@@ -46,7 +49,8 @@ class ChatMediaSender {
         type: 'IMAGE',
         media: _buildPlaceholderMedia(
           mediaKind: 'IMAGE',
-          aspectRatio: 1.0,
+          metadata: metadata,
+          fallbackAspectRatio: 1.0,
         ),
         status: 'SENDING',
       ),
@@ -73,13 +77,13 @@ class ChatMediaSender {
           resourceId: upload.fileId,
           coverUrl: upload.url,
           videoUrl: upload.url,
-          media: _buildImageMedia(upload),
+          media: _buildImageMedia(upload, metadata),
           status: 'SENT',
         ),
       );
     } catch (e) {
       removeLocalMessage(tempId);
-      showError(_toUserError(e));
+      showError(UserErrorMessage.from(e));
     } finally {
       setSending(false);
     }
@@ -88,6 +92,7 @@ class ChatMediaSender {
   Future<void> sendVideoFromPath({
     required String filePath,
     Uint8List? previewBytes,
+    MediaDraftMetadata? metadata,
   }) async {
     final tempId = nextTempId();
     insertLocalMessage(
@@ -96,7 +101,8 @@ class ChatMediaSender {
         type: 'VIDEO',
         media: _buildPlaceholderMedia(
           mediaKind: 'VIDEO',
-          aspectRatio: 9 / 16,
+          metadata: metadata,
+          fallbackAspectRatio: 9 / 16,
         ),
         status: 'SENDING',
       ),
@@ -111,7 +117,7 @@ class ChatMediaSender {
       );
       final playId = upload.videoId ?? upload.fileId;
       if (playId == null) {
-        throw Exception('Video upload did not return a resource id.');
+        throw Exception('视频上传后未返回资源 ID');
       }
       final messageId = await appState.messages.sendVideo(
         senderId: senderId,
@@ -128,13 +134,13 @@ class ChatMediaSender {
           videoResourceId: playId,
           coverUrl: upload.coverUrl,
           videoUrl: upload.videoUrl ?? upload.url,
-          media: _buildVideoMedia(upload),
+          media: _buildVideoMedia(upload, metadata),
           status: 'SENT',
         ),
       );
     } catch (e) {
       removeLocalMessage(tempId);
-      showError(_toUserError(e));
+      showError(UserErrorMessage.from(e));
     } finally {
       setSending(false);
     }
@@ -144,6 +150,7 @@ class ChatMediaSender {
     required String coverPath,
     Uint8List? previewBytes,
     required Future<FileUploadResponse> Function(int userId) upload,
+    MediaDraftMetadata? metadata,
   }) async {
     final tempId = nextTempId();
     insertLocalMessage(
@@ -152,7 +159,8 @@ class ChatMediaSender {
         type: 'DYNAMIC_PHOTO',
         media: _buildPlaceholderMedia(
           mediaKind: 'DYNAMIC_PHOTO',
-          aspectRatio: 3 / 4,
+          metadata: metadata,
+          fallbackAspectRatio: 3 / 4,
         ),
         status: 'SENDING',
       ),
@@ -164,7 +172,7 @@ class ChatMediaSender {
     try {
       final uploaded = await upload(senderId);
       if (uploaded.coverId == null || uploaded.videoId == null) {
-        throw Exception('Dynamic photo upload did not return full resources.');
+        throw Exception('实况图片上传后未返回完整资源');
       }
       final messageId = await appState.messages.sendDynamicPhoto(
         senderId: senderId,
@@ -181,13 +189,13 @@ class ChatMediaSender {
           videoResourceId: uploaded.videoId,
           coverUrl: uploaded.coverUrl,
           videoUrl: uploaded.videoUrl,
-          media: _buildDynamicMedia(uploaded),
+          media: _buildDynamicMedia(uploaded, metadata),
           status: 'SENT',
         ),
       );
     } catch (e) {
       removeLocalMessage(tempId);
-      showError(_toUserError(e));
+      showError(UserErrorMessage.from(e));
     } finally {
       setSending(false);
     }
@@ -221,7 +229,8 @@ class ChatMediaSender {
 
   ChatMedia _buildPlaceholderMedia({
     required String mediaKind,
-    required double aspectRatio,
+    MediaDraftMetadata? metadata,
+    required double fallbackAspectRatio,
   }) {
     return ChatMedia(
       mediaKind: mediaKind,
@@ -231,15 +240,20 @@ class ChatMediaSender {
       playResourceId: null,
       coverUrl: null,
       playUrl: null,
-      width: null,
-      height: null,
-      duration: null,
-      aspectRatio: aspectRatio,
+      width: metadata?.width,
+      height: metadata?.height,
+      duration: metadata?.durationSeconds,
+      aspectRatio: metadata?.aspectRatio(fallbackAspectRatio) ?? fallbackAspectRatio,
       sourceType: null,
     );
   }
 
-  ChatMedia _buildImageMedia(FileUploadResponse upload) {
+  ChatMedia _buildImageMedia(
+    FileUploadResponse upload,
+    MediaDraftMetadata? metadata,
+  ) {
+    final width = upload.width ?? metadata?.width;
+    final height = upload.height ?? metadata?.height;
     return ChatMedia(
       mediaKind: 'IMAGE',
       processingStatus: 'READY',
@@ -248,17 +262,22 @@ class ChatMediaSender {
       playResourceId: upload.fileId,
       coverUrl: upload.url,
       playUrl: upload.url,
-      width: upload.width,
-      height: upload.height,
-      duration: upload.duration,
-      aspectRatio: _aspectRatio(upload.width, upload.height, 1.0),
+      width: width,
+      height: height,
+      duration: upload.duration ?? metadata?.durationSeconds,
+      aspectRatio: _aspectRatio(width, height, metadata?.aspectRatio(1.0) ?? 1.0),
       sourceType: upload.sourceType,
     );
   }
 
-  ChatMedia _buildVideoMedia(FileUploadResponse upload) {
+  ChatMedia _buildVideoMedia(
+    FileUploadResponse upload,
+    MediaDraftMetadata? metadata,
+  ) {
     final coverId = upload.coverId;
     final playId = upload.videoId ?? upload.fileId;
+    final width = upload.width ?? metadata?.width;
+    final height = upload.height ?? metadata?.height;
     return ChatMedia(
       mediaKind: 'VIDEO',
       processingStatus: 'PROCESSING',
@@ -267,15 +286,21 @@ class ChatMediaSender {
       playResourceId: playId,
       coverUrl: upload.coverUrl,
       playUrl: upload.videoUrl ?? upload.url,
-      width: upload.width,
-      height: upload.height,
-      duration: upload.duration,
-      aspectRatio: _aspectRatio(upload.width, upload.height, 9 / 16),
+      width: width,
+      height: height,
+      duration: upload.duration ?? metadata?.durationSeconds,
+      aspectRatio:
+          _aspectRatio(width, height, metadata?.aspectRatio(9 / 16) ?? 9 / 16),
       sourceType: upload.sourceType,
     );
   }
 
-  ChatMedia _buildDynamicMedia(FileUploadResponse upload) {
+  ChatMedia _buildDynamicMedia(
+    FileUploadResponse upload,
+    MediaDraftMetadata? metadata,
+  ) {
+    final width = upload.width ?? metadata?.width;
+    final height = upload.height ?? metadata?.height;
     return ChatMedia(
       mediaKind: 'DYNAMIC_PHOTO',
       processingStatus: 'PROCESSING',
@@ -284,10 +309,11 @@ class ChatMediaSender {
       playResourceId: upload.videoId,
       coverUrl: upload.coverUrl,
       playUrl: upload.videoUrl,
-      width: upload.width,
-      height: upload.height,
-      duration: upload.duration,
-      aspectRatio: _aspectRatio(upload.width, upload.height, 3 / 4),
+      width: width,
+      height: height,
+      duration: upload.duration ?? metadata?.durationSeconds,
+      aspectRatio:
+          _aspectRatio(width, height, metadata?.aspectRatio(3 / 4) ?? 3 / 4),
       sourceType: upload.sourceType,
     );
   }
@@ -297,13 +323,5 @@ class ChatMediaSender {
       return width / height;
     }
     return fallback;
-  }
-
-  String _toUserError(Object error) {
-    final text = error.toString().trim();
-    if (text.startsWith('Exception: ')) {
-      return text.substring('Exception: '.length);
-    }
-    return text;
   }
 }
