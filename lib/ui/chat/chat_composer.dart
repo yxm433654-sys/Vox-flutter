@@ -5,7 +5,6 @@ class ChatComposer extends StatelessWidget {
     super.key,
     required this.textController,
     required this.textFocusNode,
-    required this.sending,
     required this.showEmojiPanel,
     required this.onShowAttachMenu,
     required this.onToggleEmojiPanel,
@@ -17,7 +16,6 @@ class ChatComposer extends StatelessWidget {
 
   final TextEditingController textController;
   final FocusNode textFocusNode;
-  final bool sending;
   final bool showEmojiPanel;
   final Future<void> Function() onShowAttachMenu;
   final VoidCallback onToggleEmojiPanel;
@@ -46,7 +44,7 @@ class ChatComposer extends StatelessWidget {
               children: [
                 _ComposerIconButton(
                   icon: Icons.add_rounded,
-                  onTap: sending ? null : () => onShowAttachMenu(),
+                  onTap: () => onShowAttachMenu(),
                 ),
                 const SizedBox(width: 8),
                 _ComposerIconButton(
@@ -95,7 +93,7 @@ class ChatComposer extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
-                  onPressed: sending ? null : () => onSendText(),
+                  onPressed: () => onSendText(),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(52, 52),
                     padding: EdgeInsets.zero,

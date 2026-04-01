@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 class UserErrorMessage {
   const UserErrorMessage._();
@@ -20,7 +20,7 @@ class UserErrorMessage {
     if (error is HttpException ||
         lower.contains('connection closed before full header was received') ||
         lower.contains('connection reset')) {
-      return '服务器连接已断开，请稍后重试。';
+      return '服务器连接已中断，请稍后重试。';
     }
 
     if (lower.contains('timeout') || lower.contains('timed out')) {
@@ -31,6 +31,20 @@ class UserErrorMessage {
         lower.contains('stomp') ||
         lower.contains('sockjs')) {
       return '消息连接异常，正在尝试恢复连接。';
+    }
+
+    if (lower.contains('max upload size exceeded') ||
+        lower.contains('size limit exceeded') ||
+        lower.contains('request entity too large') ||
+        lower.contains('payload too large') ||
+        lower.contains('status code: 413') ||
+        lower.contains('maximum upload size exceeded')) {
+      return '文件太大了。图片请控制在 20MB 内，视频和动态照片请控制在 256MB 内。';
+    }
+
+    if (lower.contains('unsupported file type') ||
+        lower.contains('unknown file type')) {
+      return '暂不支持这种媒体格式，请换一个文件试试。';
     }
 
     if (normalized.isEmpty) {

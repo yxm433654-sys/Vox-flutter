@@ -167,7 +167,7 @@ class MessageBubble extends StatelessWidget {
     final sending = _isSending;
 
     return GestureDetector(
-      onTap: videoUrl == null || videoUrl.trim().isEmpty
+      onTap: sending || processing || videoUrl == null || videoUrl.trim().isEmpty
           ? null
           : () => onPlayVideo(urlResolver.resolve(videoUrl)),
       child: _MediaCard(
@@ -220,7 +220,7 @@ class MessageBubble extends StatelessWidget {
     final sending = _isSending;
 
     return GestureDetector(
-      onTap: videoUrl == null || videoUrl.trim().isEmpty
+      onTap: sending || processing || videoUrl == null || videoUrl.trim().isEmpty
           ? null
           : () {
               unawaited(
@@ -573,5 +573,6 @@ class _LiveBadge extends StatelessWidget {
     );
   }
 }
+
 
 

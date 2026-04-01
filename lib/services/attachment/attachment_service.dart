@@ -174,6 +174,14 @@ class AttachmentService {
       final streamed = await _http.send(request).timeout(_requestTimeout);
       final response =
           await http.Response.fromStream(streamed).timeout(_requestTimeout);
+
+      if (response.statusCode == 413) {
+        throw Exception('Maximum upload size exceeded');
+      }
+      if (response.statusCode >= 400) {
+        throw Exception(_extractServerMessage(response));
+      }
+
       final parsed =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       final api = ApiResponse.fromJson<Object?>(parsed, (raw) => raw);
@@ -182,6 +190,21 @@ class AttachmentService {
       }
       return AttachmentUploadResponse.fromJson(api.data);
     });
+  }
+
+  String _extractServerMessage(http.Response response) {
+    final body = utf8.decode(response.bodyBytes, allowMalformed: true).trim();
+    if (body.isEmpty) {
+      return 'Request failed with status code: ${response.statusCode}';
+    }
+    try {
+      final parsed = jsonDecode(body);
+      if (parsed is Map<String, dynamic>) {
+        final api = ApiResponse.fromJson<Object?>(parsed, (raw) => raw);
+        return api.message ?? 'Request failed with status code: ${response.statusCode}';
+      }
+    } catch (_) {}
+    return body;
   }
 
   Future<http.MultipartFile> _toMultipart(
@@ -201,4 +224,3 @@ class AttachmentService {
     return http.MultipartFile.fromPath(field, file.path!, filename: file.name);
   }
 }
-

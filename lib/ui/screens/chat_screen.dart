@@ -47,7 +47,7 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription<ChatMessage>? _msgSub;
 
   bool _loading = true;
-  bool _sending = false;
+  int _pendingSendCount = 0;
   bool _userAtBottom = true;
   bool _showEmojiPanel = false;
   int _lastMessageId = 0;
@@ -58,6 +58,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _scrollCtrl.addListener(_onScroll);
+    _textFocusNode.addListener(_onTextFocusChanged);
     _init();
   }
 
@@ -65,6 +66,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _msgSub?.cancel();
     _textCtrl.dispose();
+    _textFocusNode.removeListener(_onTextFocusChanged);
     _textFocusNode.dispose();
     _scrollCtrl.removeListener(_onScroll);
     _scrollCtrl.dispose();
@@ -78,6 +80,23 @@ class _ChatScreenState extends State<ChatScreen> {
     _userAtBottom = (max - current) <= 80.0;
   }
 
+  void _onTextFocusChanged() {
+    if (!_textFocusNode.hasFocus) return;
+    _userAtBottom = true;
+    _scrollToBottomSettled();
+    Future<void>.delayed(const Duration(milliseconds: 120), () {
+      if (!mounted || !_textFocusNode.hasFocus) return;
+      _scrollToBottomSettled();
+    });
+  }
+
+  Future<void> _dismissComposerOverlays() async {
+    if (_showEmojiPanel && mounted) {
+      setState(() => _showEmojiPanel = false);
+    }
+    _textFocusNode.unfocus();
+    await Future<void>.delayed(const Duration(milliseconds: 140));
+  }
   Future<void> _init() async {
     final state = context.read<AppState>();
     final workflow = _workflow(state);
@@ -106,10 +125,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (!mounted) return;
     setState(() => _loading = false);
-    _scrollToBottom(animated: false);
+    _scrollToBottomSettled();
     Future<void>.delayed(const Duration(milliseconds: 80), () {
       if (!mounted) return;
-      _scrollToBottom(animated: false);
+      _scrollToBottomSettled();
     });
   }
 
@@ -309,7 +328,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setSending: (sending) {
         if (!mounted) return;
         setState(() {
-          _sending = sending;
+          _pendingSendCount = sending ? _pendingSendCount + 1 : (_pendingSendCount > 0 ? _pendingSendCount - 1 : 0);
           if (sending) {
             _error = null;
           }
@@ -333,9 +352,7 @@ class _ChatScreenState extends State<ChatScreen> {
       peerId: widget.peerId,
       currentUserId: currentUserId,
       dynamicPhotoAdapter: _dynamicPhotoAdapter,
-      messageSender: _messageSender(state, currentUserId),
-      sending: _sending,
-      onConversationCleared: () {
+      messageSender: _messageSender(state, currentUserId),      onConversationCleared: () {
         if (!mounted) return;
         setState(() {
           _messages.clear();
@@ -345,6 +362,14 @@ class _ChatScreenState extends State<ChatScreen> {
       },
       showSnack: _showSnack,
     );
+  }
+
+  void _scrollToBottomSettled() {
+    _scrollToBottom(animated: false);
+    Future<void>.delayed(const Duration(milliseconds: 90), () {
+      if (!mounted) return;
+      _scrollToBottom(animated: false);
+    });
   }
 
   void _insertLocalMessage(
@@ -362,7 +387,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _localCoverPathByMessageId[message.id] = localCoverPath;
       }
     });
-    _scrollToBottom(animated: false);
+    _scrollToBottomSettled();
   }
 
   void _replaceMessage(int tempId, ChatMessage message) {
@@ -421,7 +446,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _sendText() async {
-    if (_sending) return;
+    _userAtBottom = true;
     final text = _textCtrl.text.trim();
     if (text.isEmpty) return;
 
@@ -442,6 +467,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final state = context.read<AppState>();
     final session = state.session;
     if (session == null) return;
+
+    _userAtBottom = true;
+    await _dismissComposerOverlays();
+    if (!mounted) return;
+
     await _mediaActionHandler(state, session.userId).showAttachMenu();
   }
 
@@ -593,9 +623,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           ChatComposer(
             textController: _textCtrl,
-            textFocusNode: _textFocusNode,
-            sending: _sending,
-            showEmojiPanel: _showEmojiPanel,
+            textFocusNode: _textFocusNode,            showEmojiPanel: _showEmojiPanel,
             onShowAttachMenu: _showAttachMenu,
             onToggleEmojiPanel: _toggleEmojiPanel,
             onSendText: _sendText,
@@ -632,6 +660,12 @@ class _MenuActionRow extends StatelessWidget {
     );
   }
 }
+
+
+
+
+
+
 
 
 

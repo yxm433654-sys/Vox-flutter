@@ -52,7 +52,7 @@ class ChatMessageList extends StatelessWidget {
 
     return ListView.builder(
       controller: scrollController,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
       itemCount: messages.length,
       itemBuilder: (context, index) {
         final message = messages[index];
@@ -103,3 +103,4 @@ class ChatMessageList extends StatelessWidget {
     );
   }
 }
+

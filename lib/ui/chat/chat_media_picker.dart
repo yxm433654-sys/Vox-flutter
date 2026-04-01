@@ -20,6 +20,9 @@ enum ChatAssetPickerMode {
 class ChatMediaPicker {
   const ChatMediaPicker._();
 
+  static const int imageMaxBytes = 20 * 1024 * 1024;
+  static const int videoMaxBytes = 256 * 1024 * 1024;
+
   static Future<ChatAttachAction?> showAttachMenu(BuildContext context) {
     return showModalBottomSheet<ChatAttachAction>(
       context: context,
@@ -40,6 +43,15 @@ class ChatMediaPicker {
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  '图片支持多选，单张建议不超过 20MB；视频和动态照片建议不超过 256MB。',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                    height: 1.4,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -83,7 +95,7 @@ class ChatMediaPicker {
     );
   }
 
-  static Future<AssetEntity?> pickAsset({
+  static Future<List<AssetEntity>> pickAssets({
     required BuildContext context,
     required ChatAssetPickerMode mode,
     required void Function(String message) showSnack,
@@ -91,36 +103,14 @@ class ChatMediaPicker {
     final permission = await PhotoManager.requestPermissionExtend();
     if (!permission.isAuth) {
       showSnack('请先允许访问媒体库。');
-      return null;
-    }
-
-    final paths = await PhotoManager.getAssetPathList(
-      type: mode == ChatAssetPickerMode.video ? RequestType.video : RequestType.image,
-      onlyAll: true,
-      filterOption: FilterOptionGroup(
-        imageOption: const FilterOption(sizeConstraint: SizeConstraint()),
-        videoOption: const FilterOption(sizeConstraint: SizeConstraint()),
-      ),
-    );
-    if (paths.isEmpty) {
-      showSnack('没有找到媒体内容。');
-      return null;
-    }
-
-    final rawAssets = await paths.first.getAssetListPaged(page: 0, size: 60);
-    final assets = await _filterAssetsForMode(rawAssets, mode);
-    if (assets.isEmpty) {
-      if (!context.mounted) {
-        return null;
-      }
-      showSnack(_pickerEmptyMessage(mode));
-      return null;
+      return const <AssetEntity>[];
     }
     if (!context.mounted) {
-      return null;
+      return const <AssetEntity>[];
     }
 
-    return showModalBottomSheet<AssetEntity>(
+    final allowMultiple = mode != ChatAssetPickerMode.livePhoto;
+    final result = await showModalBottomSheet<List<AssetEntity>>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -129,51 +119,51 @@ class ChatMediaPicker {
         return SafeArea(
           child: SizedBox(
             height: height,
-            child: GridView.builder(
-              padding: const EdgeInsets.all(8),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 6,
-                mainAxisSpacing: 6,
-              ),
-              itemCount: assets.length,
-              itemBuilder: (_, index) {
-                final asset = assets[index];
-                return GestureDetector(
-                  onTap: () => Navigator.of(sheetContext).pop(asset),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        _AssetThumbnail(asset: asset),
-                        if (asset.type == AssetType.video)
-                          const Align(
-                            alignment: Alignment.bottomRight,
-                            child: Padding(
-                              padding: EdgeInsets.all(6),
-                              child: Icon(
-                                Icons.play_circle_fill,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        if (mode == ChatAssetPickerMode.livePhoto)
-                          const Positioned(
-                            top: 6,
-                            left: 6,
-                            child: _AssetLiveBadge(),
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+            child: _AssetPickerSheet(
+              mode: mode,
+              allowMultiple: allowMultiple,
+              showSnack: showSnack,
             ),
           ),
         );
       },
     );
+    return result ?? const <AssetEntity>[];
+  }
+
+  static Future<AssetEntity?> pickAsset({
+    required BuildContext context,
+    required ChatAssetPickerMode mode,
+    required void Function(String message) showSnack,
+  }) async {
+    final assets = await pickAssets(
+      context: context,
+      mode: mode,
+      showSnack: showSnack,
+    );
+    if (assets.isEmpty) {
+      return null;
+    }
+    return assets.first;
+  }
+
+  static Future<List<AssetEntity>> _loadAssets(ChatAssetPickerMode mode) async {
+    final paths = await PhotoManager.getAssetPathList(
+      type: mode == ChatAssetPickerMode.video
+          ? RequestType.video
+          : RequestType.image,
+      onlyAll: true,
+      filterOption: FilterOptionGroup(
+        imageOption: const FilterOption(sizeConstraint: SizeConstraint()),
+        videoOption: const FilterOption(sizeConstraint: SizeConstraint()),
+      ),
+    );
+    if (paths.isEmpty) {
+      return const <AssetEntity>[];
+    }
+
+    final rawAssets = await paths.first.getAssetListPaged(page: 0, size: 80);
+    return _filterAssetsForMode(rawAssets, mode);
   }
 
   static Future<List<AssetEntity>> _filterAssetsForMode(
@@ -197,7 +187,7 @@ class ChatMediaPicker {
       return imageAssets;
     }
 
-    final candidates = imageAssets.take(60).toList();
+    final candidates = imageAssets.take(40).toList();
     final detected = await Future.wait(
       candidates.map((asset) async => MapEntry(asset, await _isDynamicAsset(asset))),
     );
@@ -223,7 +213,7 @@ class ChatMediaPicker {
     return false;
   }
 
-  static String _pickerEmptyMessage(ChatAssetPickerMode mode) {
+  static String pickerEmptyMessage(ChatAssetPickerMode mode) {
     switch (mode) {
       case ChatAssetPickerMode.image:
         return '没有找到图片。';
@@ -232,6 +222,164 @@ class ChatMediaPicker {
       case ChatAssetPickerMode.livePhoto:
         return '没有找到动态照片。';
     }
+  }
+
+  static String pickerHint(ChatAssetPickerMode mode) {
+    switch (mode) {
+      case ChatAssetPickerMode.image:
+        return '可多选，单张建议不超过 20MB';
+      case ChatAssetPickerMode.video:
+        return '可多选，单个视频建议不超过 256MB';
+      case ChatAssetPickerMode.livePhoto:
+        return '动态照片建议不超过 256MB';
+    }
+  }
+}
+
+class _AssetPickerSheet extends StatefulWidget {
+  const _AssetPickerSheet({
+    required this.mode,
+    required this.allowMultiple,
+    required this.showSnack,
+  });
+
+  final ChatAssetPickerMode mode;
+  final bool allowMultiple;
+  final void Function(String message) showSnack;
+
+  @override
+  State<_AssetPickerSheet> createState() => _AssetPickerSheetState();
+}
+
+class _AssetPickerSheetState extends State<_AssetPickerSheet> {
+  final List<AssetEntity> _selected = <AssetEntity>[];
+
+  bool _isSelected(AssetEntity asset) {
+    return _selected.any((item) => item.id == asset.id);
+  }
+
+  void _toggle(AssetEntity asset) {
+    if (!widget.allowMultiple) {
+      Navigator.of(context).pop(<AssetEntity>[asset]);
+      return;
+    }
+
+    setState(() {
+      final index = _selected.indexWhere((item) => item.id == asset.id);
+      if (index >= 0) {
+        _selected.removeAt(index);
+      } else {
+        _selected.add(asset);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<AssetEntity>>(
+      future: ChatMediaPicker._loadAssets(widget.mode),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final assets = snapshot.data ?? const <AssetEntity>[];
+        if (assets.isEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!context.mounted) {
+              return;
+            }
+            widget.showSnack(ChatMediaPicker.pickerEmptyMessage(widget.mode));
+          });
+          return Center(
+            child: Text(
+              ChatMediaPicker.pickerEmptyMessage(widget.mode),
+              style: const TextStyle(color: Color(0xFF6B7280)),
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      ChatMediaPicker.pickerHint(widget.mode),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ),
+                  if (widget.allowMultiple)
+                    FilledButton.tonal(
+                      onPressed: _selected.isEmpty
+                          ? null
+                          : () => Navigator.of(context).pop(_selected),
+                      child: Text('发送 ${_selected.length} 项'),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.all(8),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 6,
+                ),
+                itemCount: assets.length,
+                itemBuilder: (_, index) {
+                  final asset = assets[index];
+                  final selectedIndex = _selected.indexWhere(
+                    (item) => item.id == asset.id,
+                  );
+                  return GestureDetector(
+                    onTap: () => _toggle(asset),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          _AssetThumbnail(asset: asset),
+                          if (asset.type == AssetType.video)
+                            const Align(
+                              alignment: Alignment.bottomRight,
+                              child: Padding(
+                                padding: EdgeInsets.all(6),
+                                child: Icon(
+                                  Icons.play_circle_fill,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          if (widget.mode == ChatAssetPickerMode.livePhoto)
+                            const Positioned(
+                              top: 6,
+                              left: 6,
+                              child: _AssetLiveBadge(),
+                            ),
+                          if (widget.allowMultiple && _isSelected(asset))
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: _SelectedBadge(index: selectedIndex + 1),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -342,3 +490,30 @@ class _AssetLiveBadge extends StatelessWidget {
   }
 }
 
+class _SelectedBadge extends StatelessWidget {
+  const _SelectedBadge({required this.index});
+
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 22,
+      height: 22,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0xFF10B981),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white, width: 2),
+      ),
+      child: Text(
+        '$index',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
