@@ -48,7 +48,8 @@ class ChatMessageList extends StatelessWidget {
   final MediaUrlResolver urlResolver;
   final void Function(ChatMessage message) onRetryMessage;
   final Future<void> Function(ChatMessage message) onOpenFileMessage;
-  final Future<void> Function(ChatMessage message) onShowMessageActions;
+  final Future<void> Function(ChatMessage message, Offset anchor)
+      onShowMessageActions;
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +59,7 @@ class ChatMessageList extends StatelessWidget {
 
     return ListView.builder(
       controller: scrollController,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
       itemCount: messages.length,
       itemBuilder: (context, index) {
         final message = messages[index];
@@ -106,7 +107,7 @@ class ChatMessageList extends StatelessWidget {
                   ? () => onRetryMessage(message)
                   : null,
               onOpenFile: () => onOpenFileMessage(message),
-              onLongPress: () => onShowMessageActions(message),
+              onLongPressStart: (anchor) => onShowMessageActions(message, anchor),
             ),
           ],
         );

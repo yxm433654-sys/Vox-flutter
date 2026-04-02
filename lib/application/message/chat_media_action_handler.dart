@@ -51,46 +51,16 @@ class ChatMediaActionHandler {
       return;
     }
 
-    final mediaAction = await ChatMediaPicker.showMediaMenu(context);
-    if (mediaAction == null) {
-      return;
-    }
-
-    await Future<void>.delayed(const Duration(milliseconds: 120));
-    if (!context.mounted) {
-      return;
-    }
-    switch (mediaAction) {
-      case ChatMediaEntryAction.image:
-        await pickGalleryImage();
-        break;
-      case ChatMediaEntryAction.video:
-        await pickGalleryVideo();
-        break;
-      case ChatMediaEntryAction.livePhoto:
-        await pickGalleryDynamicPhoto();
-        break;
-    }
+    await pickMedia();
   }
 
-  Future<void> pickGalleryImage() async {
-    final assets = await ChatMediaPicker.pickAssets(
+  Future<void> pickMedia() async {
+    final assets = await ChatMediaPicker.pickMediaAssets(
       context: context,
-      mode: ChatAssetPickerMode.image,
       showSnack: showSnack,
     );
     if (assets.isEmpty) return;
-    unawaited(_sendSelectedImages(assets));
-  }
-
-  Future<void> pickGalleryVideo() async {
-    final assets = await ChatMediaPicker.pickAssets(
-      context: context,
-      mode: ChatAssetPickerMode.video,
-      showSnack: showSnack,
-    );
-    if (assets.isEmpty) return;
-    unawaited(_sendSelectedVideos(assets));
+    unawaited(_sendPickedMedia(assets));
   }
 
   Future<void> pickFiles() async {
@@ -106,14 +76,7 @@ class ChatMediaActionHandler {
     unawaited(_sendSelectedFiles(files));
   }
 
-  Future<void> pickGalleryDynamicPhoto() async {
-    final asset = await ChatMediaPicker.pickAsset(
-      context: context,
-      mode: ChatAssetPickerMode.livePhoto,
-      showSnack: showSnack,
-    );
-    if (asset == null) return;
-
+  Future<void> _sendDynamicAsset(AssetEntity asset) async {
     final previewBytes = await asset.thumbnailDataWithSize(
       const ThumbnailSize(320, 320),
     );
@@ -150,61 +113,73 @@ class ChatMediaActionHandler {
     );
   }
 
-  Future<void> _sendSelectedImages(List<AssetEntity> assets) async {
-    for (final asset in assets) {
-      final file = await _resolveFile(asset);
-      if (file == null) {
-        showSnack('无法读取所选图片。');
-        continue;
+  Future<void> _sendPickedMedia(List<ChatPickedAsset> assets) async {
+    for (final item in assets) {
+      switch (item.kind) {
+        case ChatPickedAssetKind.image:
+          await _sendImageAsset(item.asset);
+          break;
+        case ChatPickedAssetKind.video:
+          await _sendVideoAsset(item.asset);
+          break;
+        case ChatPickedAssetKind.dynamicPhoto:
+          await _sendDynamicAsset(item.asset);
+          break;
       }
-
-      final length = await file.length();
-      if (length > ChatMediaPicker.imageMaxBytes) {
-        showSnack('图片大小 ${_formatBytes(length)}，超过 20MB，已跳过。');
-        continue;
-      }
-
-      final previewBytes = await asset.thumbnailDataWithSize(
-        const ThumbnailSize(320, 320),
-      );
-      await messageSender.sendImageFromPath(
-        filePath: file.path,
-        previewBytes: previewBytes,
-        metadata: MediaDraftMetadata(
-          width: asset.width,
-          height: asset.height,
-        ),
-      );
     }
   }
 
-  Future<void> _sendSelectedVideos(List<AssetEntity> assets) async {
-    for (final asset in assets) {
-      final file = await _resolveFile(asset);
-      if (file == null) {
-        showSnack('无法读取所选视频。');
-        continue;
-      }
-
-      final length = await file.length();
-      if (length > ChatMediaPicker.videoMaxBytes) {
-        showSnack('视频大小 ${_formatBytes(length)}，超过 256MB，已跳过。');
-        continue;
-      }
-
-      final previewBytes = await asset.thumbnailDataWithSize(
-        const ThumbnailSize(320, 320),
-      );
-      await messageSender.sendVideoFromPath(
-        filePath: file.path,
-        previewBytes: previewBytes,
-        metadata: MediaDraftMetadata(
-          width: asset.width,
-          height: asset.height,
-          durationSeconds: asset.duration.toDouble(),
-        ),
-      );
+  Future<void> _sendImageAsset(AssetEntity asset) async {
+    final file = await _resolveFile(asset);
+    if (file == null) {
+      showSnack('无法读取所选图片。');
+      return;
     }
+
+    final length = await file.length();
+    if (length > ChatMediaPicker.imageMaxBytes) {
+      showSnack('图片大小 ${_formatBytes(length)}，超过 20MB，已跳过。');
+      return;
+    }
+
+    final previewBytes = await asset.thumbnailDataWithSize(
+      const ThumbnailSize(320, 320),
+    );
+    await messageSender.sendImageFromPath(
+      filePath: file.path,
+      previewBytes: previewBytes,
+      metadata: MediaDraftMetadata(
+        width: asset.width,
+        height: asset.height,
+      ),
+    );
+  }
+
+  Future<void> _sendVideoAsset(AssetEntity asset) async {
+    final file = await _resolveFile(asset);
+    if (file == null) {
+      showSnack('无法读取所选视频。');
+      return;
+    }
+
+    final length = await file.length();
+    if (length > ChatMediaPicker.videoMaxBytes) {
+      showSnack('视频大小 ${_formatBytes(length)}，超过 256MB，已跳过。');
+      return;
+    }
+
+    final previewBytes = await asset.thumbnailDataWithSize(
+      const ThumbnailSize(320, 320),
+    );
+    await messageSender.sendVideoFromPath(
+      filePath: file.path,
+      previewBytes: previewBytes,
+      metadata: MediaDraftMetadata(
+        width: asset.width,
+        height: asset.height,
+        durationSeconds: asset.duration.toDouble(),
+      ),
+    );
   }
 
   Future<void> _sendSelectedFiles(List<PlatformFile> files) async {

@@ -18,6 +18,7 @@ import 'package:vox_flutter/ui/chat/local_message_factory.dart';
 import 'package:vox_flutter/ui/chat/message_list.dart';
 import 'package:vox_flutter/ui/chat/message_sender.dart';
 import 'package:vox_flutter/utils/hidden_message_store.dart';
+import 'package:vox_flutter/utils/media_saver.dart';
 import 'package:vox_flutter/utils/message_attachment_actions.dart';
 import 'package:vox_flutter/utils/user_error_message.dart';
 
@@ -650,48 +651,75 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _showMessageActions(ChatMessage message) async {
+  Future<void> _showMessageActions(ChatMessage message, Offset anchor) async {
     final session = context.read<AppState>().session;
     if (session == null) {
       return;
     }
 
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) {
+      return;
+    }
+
     final canSave = const <String>{'IMAGE', 'VIDEO', 'DYNAMIC_PHOTO', 'FILE'}
         .contains(message.type.toUpperCase());
-    final action = await showModalBottomSheet<_MessageAction>(
+    final isDynamicPhoto = message.type.toUpperCase() == 'DYNAMIC_PHOTO';
+    final action = await showMenu<_MessageAction>(
       context: context,
-      showDragHandle: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      position: RelativeRect.fromLTRB(
+        anchor.dx,
+        anchor.dy - 12,
+        overlay.size.width - anchor.dx,
+        overlay.size.height - anchor.dy,
       ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (canSave)
-                ListTile(
-                  leading: const Icon(Icons.download_rounded),
-                  title: const Text('Save to device'),
-                  onTap: () => Navigator.of(sheetContext).pop(_MessageAction.saveLocal),
-                ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline_rounded),
-                title: const Text('Delete'),
-                subtitle: const Text('Hide on this device only. This does not affect the other user or the server history.'),
-                onTap: () => Navigator.of(sheetContext).pop(_MessageAction.deleteLocal),
-              ),
-              const SizedBox(height: 8),
-            ],
+      color: Colors.white,
+      elevation: 14,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      items: [
+        if (canSave && !isDynamicPhoto)
+          const PopupMenuItem<_MessageAction>(
+            value: _MessageAction.saveLocal,
+            child: _MenuActionRow(
+              icon: Icons.download_rounded,
+              label: '保存到设备',
+            ),
           ),
-        );
-      },
+        if (isDynamicPhoto)
+          const PopupMenuItem<_MessageAction>(
+            value: _MessageAction.saveDynamicCover,
+            child: _MenuActionRow(
+              icon: Icons.image_outlined,
+              label: '保存静态图',
+            ),
+          ),
+        if (isDynamicPhoto)
+          const PopupMenuItem<_MessageAction>(
+            value: _MessageAction.saveDynamicVideo,
+            child: _MenuActionRow(
+              icon: Icons.motion_photos_on_outlined,
+              label: '保存视频',
+            ),
+          ),
+        const PopupMenuItem<_MessageAction>(
+          value: _MessageAction.deleteLocal,
+          child: _MenuActionRow(
+            icon: Icons.delete_outline_rounded,
+            label: '仅在本机隐藏',
+          ),
+        ),
+      ],
     );
 
     switch (action) {
       case _MessageAction.saveLocal:
         await _saveMessageLocally(message);
+        break;
+      case _MessageAction.saveDynamicCover:
+        await _saveDynamicPhotoPart(message, saveVideo: false);
+        break;
+      case _MessageAction.saveDynamicVideo:
+        await _saveDynamicPhotoPart(message, saveVideo: true);
         break;
       case _MessageAction.deleteLocal:
         await _deleteMessageLocally(session.userId, message);
@@ -708,6 +736,39 @@ class _ChatScreenState extends State<ChatScreen> {
         urlResolver: MediaUrlResolver(context.read<AppState>().apiBaseUrl),
       );
       _showSnack(notice);
+    } catch (error) {
+      _showSnack(UserErrorMessage.from(error));
+    }
+  }
+
+  Future<void> _saveDynamicPhotoPart(
+    ChatMessage message, {
+    required bool saveVideo,
+  }) async {
+    final resolver = MediaUrlResolver(context.read<AppState>().apiBaseUrl);
+    try {
+      if (saveVideo) {
+        final playUrl = message.resolvedPlayUrl;
+        if (playUrl == null || playUrl.trim().isEmpty) {
+          throw Exception('动态照片视频尚未准备好。');
+        }
+        await MediaSaver.saveVideoFromUrl(
+          resolver.resolve(playUrl),
+          title: message.content,
+        );
+        _showSnack('视频已保存到系统相册。');
+        return;
+      }
+
+      final coverUrl = message.resolvedCoverUrl;
+      if (coverUrl == null || coverUrl.trim().isEmpty) {
+        throw Exception('动态照片静态图尚未准备好。');
+      }
+      await MediaSaver.saveImageFromUrl(
+        resolver.resolve(coverUrl),
+        title: message.content,
+      );
+      _showSnack('静态图已保存到系统相册。');
     } catch (error) {
       _showSnack(UserErrorMessage.from(error));
     }
@@ -987,7 +1048,12 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 enum _ChatAction { clearConversation, clearCache }
-enum _MessageAction { saveLocal, deleteLocal }
+enum _MessageAction {
+  saveLocal,
+  saveDynamicCover,
+  saveDynamicVideo,
+  deleteLocal,
+}
 
 const List<String> _emojiSet = <String>[
   '😀',

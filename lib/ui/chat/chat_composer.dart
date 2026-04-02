@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
 
 class ChatComposer extends StatelessWidget {
   const ChatComposer({
@@ -26,10 +28,12 @@ class ChatComposer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = math.max(MediaQuery.viewPaddingOf(context).bottom, 10.0);
+
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        padding: EdgeInsets.fromLTRB(12, 10, 12, bottomInset),
         decoration: BoxDecoration(
           color: const Color(0xFFF8FAFC),
           border: Border(

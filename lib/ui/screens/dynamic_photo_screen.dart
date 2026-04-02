@@ -128,6 +128,36 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
     }
   }
 
+  Future<void> _saveDynamicPhotoPart(_DynamicPhotoSaveAction action) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      switch (action) {
+        case _DynamicPhotoSaveAction.cover:
+          await MediaSaver.saveImageFromUrl(
+            widget.coverUrl,
+            title: widget.title,
+          );
+          messenger.showSnackBar(
+            const SnackBar(content: Text('静态图已保存到系统相册。')),
+          );
+          break;
+        case _DynamicPhotoSaveAction.video:
+          await MediaSaver.saveVideoFromUrl(
+            widget.videoUrl,
+            title: widget.title,
+          );
+          messenger.showSnackBar(
+            const SnackBar(content: Text('视频已保存到系统相册。')),
+          );
+          break;
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
@@ -147,26 +177,7 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
               _DetailTopBar(
                 title: widget.title ?? 'Dynamic Photo',
                 onBack: _handleExit,
-                onSave: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  try {
-                    await MediaSaver.saveImageFromUrl(
-                      widget.coverUrl,
-                      title: widget.title,
-                    );
-                    messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Saved cover image to your photo library.',
-                        ),
-                      ),
-                    );
-                  } catch (e) {
-                    messenger.showSnackBar(
-                      SnackBar(content: Text(e.toString())),
-                    );
-                  }
-                },
+                onSave: _saveDynamicPhotoPart,
               ),
               Expanded(
                 child: Center(
@@ -274,7 +285,7 @@ class _DetailTopBar extends StatelessWidget {
 
   final String title;
   final Future<void> Function() onBack;
-  final Future<void> Function() onSave;
+  final Future<void> Function(_DynamicPhotoSaveAction action) onSave;
 
   @override
   Widget build(BuildContext context) {
@@ -303,10 +314,30 @@ class _DetailTopBar extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                IconButton(
-                  onPressed: onSave,
+                PopupMenuButton<_DynamicPhotoSaveAction>(
+                  onSelected: (value) => unawaited(onSave(value)),
+                  color: const Color(0xFF111827),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  itemBuilder: (context) => const [
+                    PopupMenuItem<_DynamicPhotoSaveAction>(
+                      value: _DynamicPhotoSaveAction.cover,
+                      child: Text(
+                        '保存静态图',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    PopupMenuItem<_DynamicPhotoSaveAction>(
+                      value: _DynamicPhotoSaveAction.video,
+                      child: Text(
+                        '保存视频',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ],
                   icon: const Icon(Icons.download_rounded),
-                  color: Colors.white,
+                  iconColor: Colors.white,
                 ),
               ],
             ),
@@ -367,3 +398,5 @@ class _LiveBadge extends StatelessWidget {
     );
   }
 }
+
+enum _DynamicPhotoSaveAction { cover, video }

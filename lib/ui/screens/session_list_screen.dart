@@ -149,40 +149,26 @@ class _SessionListScreenState extends State<SessionListScreen> {
         scrolledUnderElevation: 0,
         elevation: 0,
         centerTitle: true,
-        leadingWidth: 180,
+        leadingWidth: 60,
         leading: Padding(
-          padding: const EdgeInsets.only(left: 16),
-          child: Row(
-            children: [
-              avatarUrl == null
-                  ? CircleAvatar(
-                      radius: 18,
-                      backgroundColor: _avatarColor(userId),
-                      child: Text(
-                        _avatarText(username, userId),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
+          padding: const EdgeInsets.only(left: 12),
+          child: Center(
+            child: avatarUrl == null
+                ? CircleAvatar(
+                    radius: 18,
+                    backgroundColor: _avatarColor(userId),
+                    child: Text(
+                      _avatarText(username, userId),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
                       ),
-                    )
-                  : CircleAvatar(
-                      radius: 18,
-                      backgroundImage: NetworkImage(avatarUrl),
                     ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  username,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                  )
+                : CircleAvatar(
+                    radius: 18,
+                    backgroundImage: NetworkImage(avatarUrl),
                   ),
-                ),
-              ),
-            ],
           ),
         ),
         title: const Text(
@@ -209,11 +195,68 @@ class _SessionListScreenState extends State<SessionListScreen> {
                 ),
               ],
             ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: Row(
+                children: [
+                  avatarUrl == null
+                      ? CircleAvatar(
+                          radius: 20,
+                          backgroundColor: _avatarColor(userId),
+                          child: Text(
+                            _avatarText(username, userId),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        )
+                      : CircleAvatar(
+                          radius: 20,
+                          backgroundImage: NetworkImage(avatarUrl),
+                        ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          username,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'ID $userId',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           Expanded(
             child: sessionItems.isEmpty
                 ? const _EmptyConversationState()
                 : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
                     itemCount: sessionItems.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {

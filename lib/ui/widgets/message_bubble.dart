@@ -26,7 +26,7 @@ class MessageBubble extends StatelessWidget {
     this.localCoverPath,
     this.onRetry,
     this.onOpenFile,
-    this.onLongPress,
+    this.onLongPressStart,
   });
 
   final ChatMessage message;
@@ -44,7 +44,7 @@ class MessageBubble extends StatelessWidget {
   final String? localCoverPath;
   final VoidCallback? onRetry;
   final VoidCallback? onOpenFile;
-  final VoidCallback? onLongPress;
+  final ValueChanged<Offset>? onLongPressStart;
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +79,7 @@ class MessageBubble extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onLongPress: onLongPress,
+        onLongPressStart: (details) => onLongPressStart?.call(details.globalPosition),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment:

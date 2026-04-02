@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -10,16 +10,20 @@ enum ChatAttachAction {
   file,
 }
 
-enum ChatMediaEntryAction {
+enum ChatPickedAssetKind {
   image,
   video,
-  livePhoto,
+  dynamicPhoto,
 }
 
-enum ChatAssetPickerMode {
-  image,
-  video,
-  livePhoto,
+class ChatPickedAsset {
+  const ChatPickedAsset({
+    required this.asset,
+    required this.kind,
+  });
+
+  final AssetEntity asset;
+  final ChatPickedAssetKind kind;
 }
 
 class ChatMediaPicker {
@@ -46,12 +50,12 @@ class ChatMediaPicker {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Send',
+                  '发送内容',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Images are best under 20MB each. Videos, live photos, and files are best under 256MB.',
+                  '图片建议不超过 20MB。视频、动态照片和文件建议不超过 256MB。',
                   style: TextStyle(
                     fontSize: 12,
                     color: Color(0xFF6B7280),
@@ -63,7 +67,7 @@ class ChatMediaPicker {
                   children: [
                     _AttachTile(
                       icon: Icons.photo_library_outlined,
-                      label: 'Media',
+                      label: '媒体',
                       color: const Color(0xFFE0F2FE),
                       iconColor: const Color(0xFF0284C7),
                       onTap: () => Navigator.of(sheetContext).pop(ChatAttachAction.media),
@@ -71,7 +75,7 @@ class ChatMediaPicker {
                     const SizedBox(width: 14),
                     _AttachTile(
                       icon: Icons.attach_file_rounded,
-                      label: 'Files',
+                      label: '文件',
                       color: const Color(0xFFF3E8FF),
                       iconColor: const Color(0xFF7C3AED),
                       onTap: () => Navigator.of(sheetContext).pop(ChatAttachAction.file),
@@ -86,128 +90,39 @@ class ChatMediaPicker {
     );
   }
 
-  static Future<ChatMediaEntryAction?> showMediaMenu(BuildContext context) {
-    return showModalBottomSheet<ChatMediaEntryAction>(
-      context: context,
-      backgroundColor: Colors.white,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Choose media',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'You can choose up to 9 images or videos. Live photos are selected one at a time.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF6B7280),
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 14,
-                  runSpacing: 14,
-                  children: [
-                    _AttachTile(
-                      icon: Icons.image_outlined,
-                      label: 'Image',
-                      color: const Color(0xFFE0F2FE),
-                      iconColor: const Color(0xFF0284C7),
-                      onTap: () => Navigator.of(sheetContext).pop(ChatMediaEntryAction.image),
-                    ),
-                    _AttachTile(
-                      icon: Icons.smart_display_outlined,
-                      label: 'Video',
-                      color: const Color(0xFFDCFCE7),
-                      iconColor: const Color(0xFF16A34A),
-                      onTap: () => Navigator.of(sheetContext).pop(ChatMediaEntryAction.video),
-                    ),
-                    _AttachTile(
-                      icon: Icons.motion_photos_on_outlined,
-                      label: 'Live',
-                      color: const Color(0xFFFCE7F3),
-                      iconColor: const Color(0xFFDB2777),
-                      onTap: () => Navigator.of(sheetContext).pop(ChatMediaEntryAction.livePhoto),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  static Future<List<AssetEntity>> pickAssets({
+  static Future<List<ChatPickedAsset>> pickMediaAssets({
     required BuildContext context,
-    required ChatAssetPickerMode mode,
     required void Function(String message) showSnack,
   }) async {
     final permission = await PhotoManager.requestPermissionExtend();
     if (!permission.isAuth) {
       showSnack('请先允许访问媒体库。');
-      return const <AssetEntity>[];
+      return const <ChatPickedAsset>[];
     }
     if (!context.mounted) {
-      return const <AssetEntity>[];
+      return const <ChatPickedAsset>[];
     }
 
-    final allowMultiple = mode != ChatAssetPickerMode.livePhoto;
-    final result = await showModalBottomSheet<List<AssetEntity>>(
+    final result = await showModalBottomSheet<List<ChatPickedAsset>>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) {
-        final height = MediaQuery.of(sheetContext).size.height * 0.76;
+        final height = MediaQuery.of(sheetContext).size.height * 0.78;
         return SafeArea(
           child: SizedBox(
             height: height,
-            child: _AssetPickerSheet(
-              mode: mode,
-              allowMultiple: allowMultiple,
-              showSnack: showSnack,
-            ),
+            child: _MixedAssetPickerSheet(showSnack: showSnack),
           ),
         );
       },
     );
-    return result ?? const <AssetEntity>[];
+    return result ?? const <ChatPickedAsset>[];
   }
 
-  static Future<AssetEntity?> pickAsset({
-    required BuildContext context,
-    required ChatAssetPickerMode mode,
-    required void Function(String message) showSnack,
-  }) async {
-    final assets = await pickAssets(
-      context: context,
-      mode: mode,
-      showSnack: showSnack,
-    );
-    if (assets.isEmpty) {
-      return null;
-    }
-    return assets.first;
-  }
-
-  static Future<List<AssetEntity>> _loadAssets(ChatAssetPickerMode mode) async {
+  static Future<List<ChatPickedAsset>> _loadAssets() async {
     final paths = await PhotoManager.getAssetPathList(
-      type: mode == ChatAssetPickerMode.video
-          ? RequestType.video
-          : RequestType.image,
+      type: RequestType.common,
       onlyAll: true,
       filterOption: FilterOptionGroup(
         imageOption: const FilterOption(sizeConstraint: SizeConstraint()),
@@ -215,114 +130,67 @@ class ChatMediaPicker {
       ),
     );
     if (paths.isEmpty) {
-      return const <AssetEntity>[];
+      return const <ChatPickedAsset>[];
     }
 
-    final rawAssets = await paths.first.getAssetListPaged(page: 0, size: 80);
-    return _filterAssetsForMode(rawAssets, mode);
-  }
-
-  static Future<List<AssetEntity>> _filterAssetsForMode(
-    List<AssetEntity> assets,
-    ChatAssetPickerMode mode,
-  ) async {
-    if (mode == ChatAssetPickerMode.video) {
-      return assets.where((asset) => asset.type == AssetType.video).toList();
-    }
-
-    final imageAssets =
-        assets.where((asset) => asset.type == AssetType.image).toList();
-    if (Platform.isIOS) {
-      return imageAssets.where((asset) {
-        final isLive = asset.isLivePhoto;
-        return mode == ChatAssetPickerMode.livePhoto ? isLive : !isLive;
-      }).toList();
-    }
-
-    if (Platform.isAndroid && mode == ChatAssetPickerMode.image) {
-      return imageAssets;
-    }
-
-    final candidates = imageAssets.take(40).toList();
-    final detected = await Future.wait(
-      candidates.map(
-        (asset) async => MapEntry(asset, await _isDynamicAsset(asset)),
-      ),
-    );
-
-    final filtered = <AssetEntity>[];
-    for (final entry in detected) {
-      if (mode == ChatAssetPickerMode.livePhoto && entry.value) {
-        filtered.add(entry.key);
-      } else if (mode == ChatAssetPickerMode.image && !entry.value) {
-        filtered.add(entry.key);
+    final rawAssets = await paths.first.getAssetListPaged(page: 0, size: 100);
+    final items = <ChatPickedAsset>[];
+    for (final asset in rawAssets) {
+      final kind = await _resolveKind(asset);
+      if (kind == null) {
+        continue;
       }
+      items.add(ChatPickedAsset(asset: asset, kind: kind));
     }
-    return filtered;
+    return items;
   }
 
-  static Future<bool> _isDynamicAsset(AssetEntity asset) async {
+  static Future<ChatPickedAssetKind?> _resolveKind(AssetEntity asset) async {
+    if (asset.type == AssetType.video) {
+      return ChatPickedAssetKind.video;
+    }
+    if (asset.type != AssetType.image) {
+      return null;
+    }
+
     if (Platform.isIOS) {
-      return asset.isLivePhoto;
+      return asset.isLivePhoto
+          ? ChatPickedAssetKind.dynamicPhoto
+          : ChatPickedAssetKind.image;
     }
+
     if (Platform.isAndroid) {
-      return DynamicPhotoDetector.detectAndroidMotionPhoto(asset);
+      final isDynamic = await DynamicPhotoDetector.detectAndroidMotionPhoto(asset);
+      return isDynamic
+          ? ChatPickedAssetKind.dynamicPhoto
+          : ChatPickedAssetKind.image;
     }
-    return false;
-  }
 
-  static String pickerEmptyMessage(ChatAssetPickerMode mode) {
-    switch (mode) {
-      case ChatAssetPickerMode.image:
-        return '没有找到图片。';
-      case ChatAssetPickerMode.video:
-        return '没有找到视频。';
-      case ChatAssetPickerMode.livePhoto:
-        return '没有找到动态照片。';
-    }
-  }
-
-  static String pickerHint(ChatAssetPickerMode mode) {
-    switch (mode) {
-      case ChatAssetPickerMode.image:
-        return '可多选，最多 9 张，单张建议不超过 20MB';
-      case ChatAssetPickerMode.video:
-        return '可多选，最多 9 个，单个视频建议不超过 256MB';
-      case ChatAssetPickerMode.livePhoto:
-        return '动态照片建议不超过 256MB';
-    }
+    return ChatPickedAssetKind.image;
   }
 }
 
-class _AssetPickerSheet extends StatefulWidget {
-  const _AssetPickerSheet({
-    required this.mode,
-    required this.allowMultiple,
+class _MixedAssetPickerSheet extends StatefulWidget {
+  const _MixedAssetPickerSheet({
     required this.showSnack,
   });
 
-  final ChatAssetPickerMode mode;
-  final bool allowMultiple;
   final void Function(String message) showSnack;
 
   @override
-  State<_AssetPickerSheet> createState() => _AssetPickerSheetState();
+  State<_MixedAssetPickerSheet> createState() => _MixedAssetPickerSheetState();
 }
 
-class _AssetPickerSheetState extends State<_AssetPickerSheet> {
-  final List<AssetEntity> _selected = <AssetEntity>[];
-  Future<List<AssetEntity>>? _assetsFuture;
+class _MixedAssetPickerSheetState extends State<_MixedAssetPickerSheet> {
+  final List<ChatPickedAsset> _selected = <ChatPickedAsset>[];
   final Map<String, Future<Uint8List?>> _thumbnailFutures =
       <String, Future<Uint8List?>>{};
+  late final Future<List<ChatPickedAsset>> _assetsFuture;
 
   @override
   void initState() {
     super.initState();
-    _assetsFuture = ChatMediaPicker._loadAssets(widget.mode);
-  }
-
-  bool _isSelected(AssetEntity asset) {
-    return _selected.any((item) => item.id == asset.id);
+    _assetsFuture = ChatMediaPicker._loadAssets();
   }
 
   Future<Uint8List?> _thumbnailFuture(AssetEntity asset) {
@@ -332,13 +200,14 @@ class _AssetPickerSheetState extends State<_AssetPickerSheet> {
     );
   }
 
-  void _toggle(AssetEntity asset) {
-    if (!widget.allowMultiple) {
-      Navigator.of(context).pop(<AssetEntity>[asset]);
-      return;
-    }
+  bool _isSelected(ChatPickedAsset asset) {
+    return _selected.any((item) => item.asset.id == asset.asset.id);
+  }
 
-    final existingIndex = _selected.indexWhere((item) => item.id == asset.id);
+  void _toggle(ChatPickedAsset asset) {
+    final existingIndex = _selected.indexWhere(
+      (item) => item.asset.id == asset.asset.id,
+    );
     if (existingIndex >= 0) {
       setState(() {
         _selected.removeAt(existingIndex);
@@ -358,25 +227,25 @@ class _AssetPickerSheetState extends State<_AssetPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<AssetEntity>>(
+    return FutureBuilder<List<ChatPickedAsset>>(
       future: _assetsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
 
-                final assets = snapshot.data ?? const <AssetEntity>[];
+        final assets = snapshot.data ?? const <ChatPickedAsset>[];
         if (assets.isEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!context.mounted) {
               return;
             }
-            widget.showSnack(ChatMediaPicker.pickerEmptyMessage(widget.mode));
+            widget.showSnack('没有找到可发送的图片、视频或动态照片。');
           });
-          return Center(
+          return const Center(
             child: Text(
-              ChatMediaPicker.pickerEmptyMessage(widget.mode),
-              style: const TextStyle(color: Color(0xFF6B7280)),
+              '没有找到可发送的图片、视频或动态照片。',
+              style: TextStyle(color: Color(0xFF6B7280)),
             ),
           );
         }
@@ -387,22 +256,21 @@ class _AssetPickerSheetState extends State<_AssetPickerSheet> {
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
               child: Row(
                 children: [
-                  Expanded(
+                  const Expanded(
                     child: Text(
-                      ChatMediaPicker.pickerHint(widget.mode),
-                      style: const TextStyle(
+                      '图片、视频和动态照片混合展示。点击选择后直接发送，最多 9 项。',
+                      style: TextStyle(
                         fontSize: 12,
                         color: Color(0xFF6B7280),
                       ),
                     ),
                   ),
-                  if (widget.allowMultiple)
-                    FilledButton.tonal(
-                      onPressed: _selected.isEmpty
-                          ? null
-                          : () => Navigator.of(context).pop(_selected),
-                      child: Text('发送 ${_selected.length} 项'),
-                    ),
+                  FilledButton.tonal(
+                    onPressed: _selected.isEmpty
+                        ? null
+                        : () => Navigator.of(context).pop(_selected),
+                    child: Text('发送 ${_selected.length} 项'),
+                  ),
                 ],
               ),
             ),
@@ -416,22 +284,21 @@ class _AssetPickerSheetState extends State<_AssetPickerSheet> {
                 ),
                 itemCount: assets.length,
                 itemBuilder: (_, index) {
-                  final asset = assets[index];
+                  final item = assets[index];
                   final selectedIndex = _selected.indexWhere(
-                    (item) => item.id == asset.id,
+                    (selected) => selected.asset.id == item.asset.id,
                   );
                   return GestureDetector(
-                    onTap: () => _toggle(asset),
+                    onTap: () => _toggle(item),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
                           _AssetThumbnail(
-                            asset: asset,
-                            future: _thumbnailFuture(asset),
+                            future: _thumbnailFuture(item.asset),
                           ),
-                          if (asset.type == AssetType.video)
+                          if (item.kind == ChatPickedAssetKind.video)
                             const Align(
                               alignment: Alignment.bottomRight,
                               child: Padding(
@@ -442,13 +309,13 @@ class _AssetPickerSheetState extends State<_AssetPickerSheet> {
                                 ),
                               ),
                             ),
-                          if (widget.mode == ChatAssetPickerMode.livePhoto)
+                          if (item.kind == ChatPickedAssetKind.dynamicPhoto)
                             const Positioned(
                               top: 6,
                               left: 6,
                               child: _AssetLiveBadge(),
                             ),
-                          if (widget.allowMultiple && _isSelected(asset))
+                          if (_isSelected(item))
                             Positioned(
                               top: 6,
                               right: 6,
@@ -517,9 +384,8 @@ class _AttachTile extends StatelessWidget {
 }
 
 class _AssetThumbnail extends StatelessWidget {
-  const _AssetThumbnail({required this.asset, required this.future});
+  const _AssetThumbnail({required this.future});
 
-  final AssetEntity asset;
   final Future<Uint8List?> future;
 
   @override

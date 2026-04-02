@@ -25,6 +25,11 @@ class _LoginScreenState extends State<LoginScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   @override
@@ -203,133 +208,144 @@ class _LoginScreenState extends State<LoginScreen>
           ),
         ],
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 430),
-            child: Container(
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(28),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 26,
-                    offset: const Offset(0, 14),
-                  ),
-                ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight - 32,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 58,
-                    height: 58,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
-                      ),
-                      borderRadius: BorderRadius.all(Radius.circular(18)),
-                    ),
-                    child: const Icon(
-                      Icons.chat_bubble_rounded,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 430),
+                  child: Container(
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
                       color: Colors.white,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Vox',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '用图片、视频和动态照片记录每一次聊天瞬间。',
-                    style: TextStyle(color: Colors.grey.shade600, height: 1.5),
-                  ),
-                  const SizedBox(height: 18),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: Text(
-                      'API: $apiBaseUrl',
-                      style: const TextStyle(
-                        color: Color(0xFF64748B),
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFBFDBFE)),
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      indicator: BoxDecoration(
-                        color: const Color(0xFF2563EB),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      dividerColor: Colors.transparent,
-                      labelColor: Colors.white,
-                      unselectedLabelColor: const Color(0xFF2563EB),
-                      labelStyle: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      tabs: const [
-                        Tab(text: '登录'),
-                        Tab(text: '注册'),
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.06),
+                          blurRadius: 26,
+                          offset: const Offset(0, 14),
+                        ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    height: 310,
-                    child: TabBarView(
-                      controller: _tabController,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _AuthForm(
-                          usernameController: _loginUserCtrl,
-                          passwordController: _loginPassCtrl,
-                          submitText: '登录',
-                          loading: _loading,
-                          obscureText: _loginObscure,
-                          onToggleObscure: () => setState(() {
-                            _loginObscure = !_loginObscure;
-                          }),
-                          onSubmit: _doLogin,
+                        Container(
+                          width: 58,
+                          height: 58,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                            ),
+                            borderRadius: BorderRadius.all(Radius.circular(18)),
+                          ),
+                          child: const Icon(
+                            Icons.chat_bubble_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
                         ),
-                        _AuthForm(
-                          usernameController: _regUserCtrl,
-                          passwordController: _regPassCtrl,
-                          submitText: '创建账号',
-                          loading: _loading,
-                          obscureText: _registerObscure,
-                          onToggleObscure: () => setState(() {
-                            _registerObscure = !_registerObscure;
-                          }),
-                          onSubmit: _doRegister,
+                        const SizedBox(height: 18),
+                        const Text(
+                          'Vox',
+                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '用图片、视频和动态照片记录每一次聊天瞬间。',
+                          style: TextStyle(color: Colors.grey.shade600, height: 1.5),
+                        ),
+                        const SizedBox(height: 18),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Text(
+                            'API: $apiBaseUrl',
+                            style: const TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFBFDBFE)),
+                          ),
+                          child: TabBar(
+                            controller: _tabController,
+                            indicator: BoxDecoration(
+                              color: const Color(0xFF2563EB),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            indicatorSize: TabBarIndicatorSize.tab,
+                            dividerColor: Colors.transparent,
+                            labelColor: Colors.white,
+                            unselectedLabelColor: const Color(0xFF2563EB),
+                            labelStyle: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            tabs: const [
+                              Tab(text: '登录'),
+                              Tab(text: '注册'),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 180),
+                          child: _tabController.index == 0
+                              ? _AuthForm(
+                                  key: const ValueKey('login-form'),
+                                  usernameController: _loginUserCtrl,
+                                  passwordController: _loginPassCtrl,
+                                  submitText: '登录',
+                                  loading: _loading,
+                                  obscureText: _loginObscure,
+                                  onToggleObscure: () => setState(() {
+                                    _loginObscure = !_loginObscure;
+                                  }),
+                                  onSubmit: _doLogin,
+                                )
+                              : _AuthForm(
+                                  key: const ValueKey('register-form'),
+                                  usernameController: _regUserCtrl,
+                                  passwordController: _regPassCtrl,
+                                  submitText: '创建账号',
+                                  loading: _loading,
+                                  obscureText: _registerObscure,
+                                  onToggleObscure: () => setState(() {
+                                    _registerObscure = !_registerObscure;
+                                  }),
+                                  onSubmit: _doRegister,
+                                ),
                         ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -337,6 +353,7 @@ class _LoginScreenState extends State<LoginScreen>
 
 class _AuthForm extends StatelessWidget {
   const _AuthForm({
+    super.key,
     required this.usernameController,
     required this.passwordController,
     required this.submitText,
@@ -394,7 +411,7 @@ class _AuthForm extends StatelessWidget {
             style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
           ),
         ),
-        const Spacer(),
+        const SizedBox(height: 22),
         SizedBox(
           width: double.infinity,
           child: FilledButton(
