@@ -267,9 +267,25 @@ class _AssetPickerSheet extends StatefulWidget {
 
 class _AssetPickerSheetState extends State<_AssetPickerSheet> {
   final List<AssetEntity> _selected = <AssetEntity>[];
+  Future<List<AssetEntity>>? _assetsFuture;
+  final Map<String, Future<Uint8List?>> _thumbnailFutures =
+      <String, Future<Uint8List?>>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _assetsFuture = ChatMediaPicker._loadAssets(widget.mode);
+  }
 
   bool _isSelected(AssetEntity asset) {
     return _selected.any((item) => item.id == asset.id);
+  }
+
+  Future<Uint8List?> _thumbnailFuture(AssetEntity asset) {
+    return _thumbnailFutures.putIfAbsent(
+      asset.id,
+      () => asset.thumbnailDataWithSize(const ThumbnailSize(160, 160)),
+    );
   }
 
   void _toggle(AssetEntity asset) {
@@ -299,7 +315,7 @@ class _AssetPickerSheetState extends State<_AssetPickerSheet> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<AssetEntity>>(
-      future: ChatMediaPicker._loadAssets(widget.mode),
+      future: _assetsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
@@ -367,7 +383,10 @@ class _AssetPickerSheetState extends State<_AssetPickerSheet> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          _AssetThumbnail(asset: asset),
+                          _AssetThumbnail(
+                            asset: asset,
+                            future: _thumbnailFuture(asset),
+                          ),
                           if (asset.type == AssetType.video)
                             const Align(
                               alignment: Alignment.bottomRight,
@@ -454,14 +473,15 @@ class _AttachTile extends StatelessWidget {
 }
 
 class _AssetThumbnail extends StatelessWidget {
-  const _AssetThumbnail({required this.asset});
+  const _AssetThumbnail({required this.asset, required this.future});
 
   final AssetEntity asset;
+  final Future<Uint8List?> future;
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<Uint8List?>(
-      future: asset.thumbnailDataWithSize(const ThumbnailSize(160, 160)),
+      future: future,
       builder: (_, snapshot) {
         final data = snapshot.data;
         if (data == null) {
