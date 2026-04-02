@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -81,21 +81,21 @@ class MessageBubble extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onLongPress: onLongPress,
         child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment:
-            isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: isMine
-            ? [
-                Flexible(child: column),
-                const SizedBox(width: 8),
-                avatar,
-              ]
-            : [
-                avatar,
-                const SizedBox(width: 8),
-                Flexible(child: column),
-              ],
-      ),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment:
+              isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+          children: isMine
+              ? [
+                  Flexible(child: column),
+                  const SizedBox(width: 8),
+                  avatar,
+                ]
+              : [
+                  avatar,
+                  const SizedBox(width: 8),
+                  Flexible(child: column),
+                ],
+        ),
       ),
     );
   }
@@ -111,43 +111,35 @@ class MessageBubble extends StatelessWidget {
   bool get _isFailed => message.isFailed;
   bool get _isMedia => _isMediaType(message.type);
   bool get _shouldShowFooterStatus => !_isMedia && (_isSending || _isFailed);
-  String get _footerStatusLabel => _isFailed ? 'Failed. Tap to retry' : 'Sending';
+  String get _footerStatusLabel =>
+      _isFailed ? 'Failed. Tap to retry' : 'Sending';
 
   Widget _content(double mediaWidth, double maxMediaHeight) {
     final type = message.type.toUpperCase();
     final media = message.media;
 
     if (type == 'TEXT') {
+      // Pass onRetry explicitly – _TextBubble must not capture parent scope.
       return _TextBubble(
         text: message.content ?? '',
         isMine: isMine,
         failed: _isFailed,
+        onRetry: onRetry,
       );
     }
-    if (type == 'IMAGE') {
-      return _imageBubble(mediaWidth, maxMediaHeight, media);
-    }
-    if (type == 'VIDEO') {
-      return _videoBubble(mediaWidth, maxMediaHeight, media);
-    }
-    if (type == 'DYNAMIC_PHOTO') {
-      return _dynamicBubble(mediaWidth, maxMediaHeight, media);
-    }
-    if (type == 'FILE') {
-      return _fileBubble();
-    }
+    if (type == 'IMAGE') return _imageBubble(mediaWidth, maxMediaHeight, media);
+    if (type == 'VIDEO') return _videoBubble(mediaWidth, maxMediaHeight, media);
+    if (type == 'DYNAMIC_PHOTO') return _dynamicBubble(mediaWidth, maxMediaHeight, media);
+    if (type == 'FILE') return _fileBubble();
     return _TextBubble(
       text: message.content ?? type,
       isMine: isMine,
       failed: _isFailed,
+      onRetry: onRetry,
     );
   }
 
-  Widget _imageBubble(
-    double mediaWidth,
-    double maxMediaHeight,
-    ChatMedia? media,
-  ) {
+  Widget _imageBubble(double mediaWidth, double maxMediaHeight, ChatMedia? media) {
     final size = _mediaFrameSize(
       mediaWidth: mediaWidth,
       maxMediaHeight: maxMediaHeight,
@@ -175,20 +167,14 @@ class MessageBubble extends StatelessWidget {
                 child: _InlineStatus(label: 'Sending'),
               )
             else if (_isFailed)
-              Positioned.fill(
-                child: _MediaRetryOverlay(onTap: onRetry),
-              ),
+              Positioned.fill(child: _MediaRetryOverlay(onTap: onRetry)),
           ],
         ),
       ),
     );
   }
 
-  Widget _videoBubble(
-    double mediaWidth,
-    double maxMediaHeight,
-    ChatMedia? media,
-  ) {
+  Widget _videoBubble(double mediaWidth, double maxMediaHeight, ChatMedia? media) {
     final size = _mediaFrameSize(
       mediaWidth: mediaWidth,
       maxMediaHeight: maxMediaHeight,
@@ -202,10 +188,7 @@ class MessageBubble extends StatelessWidget {
     return GestureDetector(
       onTap: _isFailed
           ? onRetry
-          : _isSending ||
-                  processing ||
-                  videoUrl == null ||
-                  videoUrl.trim().isEmpty
+          : _isSending || processing || videoUrl == null || videoUrl.trim().isEmpty
               ? null
               : () => onPlayVideo(urlResolver.resolve(videoUrl)),
       child: _MediaCard(
@@ -244,11 +227,7 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _dynamicBubble(
-    double mediaWidth,
-    double maxMediaHeight,
-    ChatMedia? media,
-  ) {
+  Widget _dynamicBubble(double mediaWidth, double maxMediaHeight, ChatMedia? media) {
     final size = _mediaFrameSize(
       mediaWidth: mediaWidth,
       maxMediaHeight: maxMediaHeight,
@@ -262,10 +241,7 @@ class MessageBubble extends StatelessWidget {
     return GestureDetector(
       onTap: _isFailed
           ? onRetry
-          : _isSending ||
-                  processing ||
-                  videoUrl == null ||
-                  videoUrl.trim().isEmpty
+          : _isSending || processing || videoUrl == null || videoUrl.trim().isEmpty
               ? null
               : () {
                   unawaited(
@@ -286,11 +262,7 @@ class MessageBubble extends StatelessWidget {
           children: [
             _buildMediaImage(url: coverUrl, fit: BoxFit.cover),
             const _MediaShade(),
-            const Positioned(
-              top: 8,
-              left: 8,
-              child: _LiveBadge(),
-            ),
+            const Positioned(top: 8, left: 8, child: _LiveBadge()),
             if (_isSending)
               const Positioned(
                 left: 10,
@@ -391,10 +363,7 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  Widget _buildMediaImage({
-    required String? url,
-    required BoxFit fit,
-  }) {
+  Widget _buildMediaImage({required String? url, required BoxFit fit}) {
     if (localCoverBytes != null) {
       return Image.memory(localCoverBytes!, fit: fit, gaplessPlayback: true);
     }
@@ -418,8 +387,7 @@ class MessageBubble extends StatelessWidget {
     required double maxMediaHeight,
     required double aspectRatio,
   }) {
-    final safeRatio =
-        aspectRatio.isFinite && aspectRatio > 0 ? aspectRatio : 1.0;
+    final safeRatio = aspectRatio.isFinite && aspectRatio > 0 ? aspectRatio : 1.0;
     var width = mediaWidth;
     var height = width / safeRatio;
     if (height > maxMediaHeight) {
@@ -431,9 +399,7 @@ class MessageBubble extends StatelessWidget {
 
   double _resolveAspectRatio(ChatMedia? media, {required double fallback}) {
     final ratio = media?.aspectRatio;
-    if (ratio != null && ratio.isFinite && ratio > 0) {
-      return ratio;
-    }
+    if (ratio != null && ratio.isFinite && ratio > 0) return ratio;
     final width = media?.width;
     final height = media?.height;
     if (width != null && height != null && width > 0 && height > 0) {
@@ -457,9 +423,7 @@ class MessageBubble extends StatelessWidget {
   String? _formatDuration(double? durationSeconds) {
     if (durationSeconds == null ||
         !durationSeconds.isFinite ||
-        durationSeconds <= 0) {
-      return null;
-    }
+        durationSeconds <= 0) return null;
     final totalSeconds = durationSeconds.round();
     final minutes = totalSeconds ~/ 60;
     final seconds = totalSeconds % 60;
@@ -467,16 +431,22 @@ class MessageBubble extends StatelessWidget {
   }
 }
 
+// ── Sub-widgets ───────────────────────────────────────────────────────────────
+
+/// Text bubble. All state it needs is passed explicitly; it does NOT capture
+/// anything from MessageBubble's scope.
 class _TextBubble extends StatelessWidget {
   const _TextBubble({
     required this.text,
     required this.isMine,
     required this.failed,
+    this.onRetry,
   });
 
   final String text;
   final bool isMine;
   final bool failed;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -487,21 +457,22 @@ class _TextBubble extends StatelessWidget {
             ? Colors.transparent
             : const Color(0xFFE5E7EB);
     return GestureDetector(
-      onTap: _isFailed ? onRetry : onOpenFile,
+      onTap: failed ? onRetry : null,
       child: ConstrainedBox(
-      constraints: BoxConstraints(
-        maxWidth: math.min(MediaQuery.of(context).size.width * 0.68, 320.0),
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: bg,
-          border: Border.all(color: borderColor),
-          borderRadius: BorderRadius.circular(14),
+        constraints: BoxConstraints(
+          maxWidth: math.min(MediaQuery.of(context).size.width * 0.68, 320.0),
         ),
-        child: Text(
-          text,
-          style: const TextStyle(fontSize: 15, color: Color(0xFF111827)),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: bg,
+            border: Border.all(color: borderColor),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 15, color: Color(0xFF111827)),
+          ),
         ),
       ),
     );
@@ -540,10 +511,7 @@ class _Avatar extends StatelessWidget {
       backgroundColor: colors[seed.abs() % colors.length],
       child: Text(
         trimmed.isEmpty ? '?' : trimmed.characters.first,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-        ),
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -583,11 +551,7 @@ class _MediaShade extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent,
-            Color(0x16000000),
-            Color(0x55000000),
-          ],
+          colors: [Colors.transparent, Color(0x16000000), Color(0x55000000)],
           stops: [0.45, 0.72, 1.0],
         ),
       ),
@@ -610,10 +574,7 @@ class _NeutralPlaceholder extends StatelessWidget {
           color: const Color(0x33000000),
           borderRadius: BorderRadius.circular(999),
         ),
-        child: const Icon(
-          Icons.photo_outlined,
-          color: Colors.white70,
-        ),
+        child: const Icon(Icons.photo_outlined, color: Colors.white70),
       ),
     );
   }
@@ -631,18 +592,13 @@ class _PlayBadge extends StatelessWidget {
         color: Colors.black.withOpacity(0.36),
         shape: BoxShape.circle,
       ),
-      child: const Icon(
-        Icons.play_arrow_rounded,
-        color: Colors.white,
-        size: 30,
-      ),
+      child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 30),
     );
   }
 }
 
 class _DurationBadge extends StatelessWidget {
   const _DurationBadge({required this.label});
-
   final String label;
 
   @override
@@ -656,10 +612,7 @@ class _DurationBadge extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
+            color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700),
       ),
     );
   }
@@ -667,7 +620,6 @@ class _DurationBadge extends StatelessWidget {
 
 class _InlineStatus extends StatelessWidget {
   const _InlineStatus({required this.label});
-
   final String label;
 
   @override
@@ -681,10 +633,7 @@ class _InlineStatus extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
+            color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -711,16 +660,13 @@ class _StatusFooter extends StatelessWidget {
         color: highlight ? const Color(0xFFDC2626) : const Color(0xFF6B7280),
       ),
     );
-    if (onTap == null) {
-      return text;
-    }
+    if (onTap == null) return text;
     return GestureDetector(onTap: onTap, child: text);
   }
 }
 
 class _MediaRetryOverlay extends StatelessWidget {
   const _MediaRetryOverlay({this.onTap});
-
   final VoidCallback? onTap;
 
   @override
@@ -739,10 +685,9 @@ class _MediaRetryOverlay extends StatelessWidget {
                 'Failed\nTap to retry',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -766,10 +711,7 @@ class _LiveBadge extends StatelessWidget {
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircleAvatar(
-            radius: 4,
-            backgroundColor: Color(0xFFFF4D4F),
-          ),
+          CircleAvatar(radius: 4, backgroundColor: Color(0xFFFF4D4F)),
           SizedBox(width: 4),
           Text(
             'LIVE',

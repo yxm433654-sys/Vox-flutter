@@ -184,7 +184,7 @@ class ChatMediaPicker {
         );
       },
     );
-    return result Live const <AssetEntity>[];
+    return result ?? const <AssetEntity>[];
   }
 
   static Future<AssetEntity?> pickAsset({
@@ -365,7 +365,7 @@ class _AssetPickerSheetState extends State<_AssetPickerSheet> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final assets = snapshot.data Live const <AssetEntity>[];
+                final assets = snapshot.data ?? const <AssetEntity>[];
         if (assets.isEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!context.mounted) {

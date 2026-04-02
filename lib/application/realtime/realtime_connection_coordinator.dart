@@ -57,6 +57,9 @@ class RealtimeConnectionCoordinator {
         }
       },
       onSessionChanged: refreshSessions,
+      onMessageRead: (_) {
+        notifyListeners();
+      },
       onError: (_) {
         final nextNotice = UserErrorMessage.from(
           const HttpException('connection closed before full header was received'),

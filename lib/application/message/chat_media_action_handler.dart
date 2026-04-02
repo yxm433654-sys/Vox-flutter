@@ -43,6 +43,9 @@ class ChatMediaActionHandler {
     }
 
     await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!context.mounted) {
+      return;
+    }
     if (action == ChatAttachAction.file) {
       await pickFiles();
       return;
@@ -54,6 +57,9 @@ class ChatMediaActionHandler {
     }
 
     await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!context.mounted) {
+      return;
+    }
     switch (mediaAction) {
       case ChatMediaEntryAction.image:
         await pickGalleryImage();

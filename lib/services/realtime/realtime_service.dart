@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:vox_flutter/models/message.dart';
@@ -24,6 +24,7 @@ class RealtimeService {
     required int lastMessageId,
     required void Function(ChatMessage message) onMessage,
     required void Function() onSessionChanged,
+    required void Function(int messageId) onMessageRead,
     required void Function(Object error) onError,
   }) {
     stop();
@@ -41,12 +42,20 @@ class RealtimeService {
             if (obj is! Map) return;
             final type = obj['type']?.toString();
             final data = obj['data'];
-            if (type == 'NEW_MESSAGE') {
-              final msg = ChatMessage.fromJson(data);
-              _ingestMessage(msg, onMessage);
-            } else if (type == 'SESSION_UPDATED' ||
-                type == 'SESSION_LIST_CHANGED') {
-              onSessionChanged();
+            switch (type) {
+              case 'NEW_MESSAGE':
+                final msg = ChatMessage.fromJson(data);
+                _ingestMessage(msg, onMessage);
+              case 'SESSION_UPDATED' || 'SESSION_LIST_CHANGED':
+                onSessionChanged();
+              case 'READ_RECEIPT':
+                // Server tells us one of our sent messages was read.
+                final messageId = data is Map ? data['messageId'] : null;
+                if (messageId is int) {
+                  onMessageRead(messageId);
+                } else if (messageId is num) {
+                  onMessageRead(messageId.toInt());
+                }
             }
           } catch (e) {
             onError(e);
@@ -75,9 +84,7 @@ class RealtimeService {
   }
 
   void updateLastMessageId(int value) {
-    if (value > _lastMessageId) {
-      _lastMessageId = value;
-    }
+    if (value > _lastMessageId) _lastMessageId = value;
   }
 
   void stop() {
@@ -94,15 +101,11 @@ class RealtimeService {
     ChatMessage message,
     void Function(ChatMessage message) onMessage,
   ) {
-    if (message.id > _lastMessageId) {
-      _lastMessageId = message.id;
-    }
+    if (message.id > _lastMessageId) _lastMessageId = message.id;
 
     final fingerprint = jsonEncode(message.toJson());
     final previous = _messageFingerprints[message.id];
-    if (previous == fingerprint) {
-      return;
-    }
+    if (previous == fingerprint) return;
 
     _messageFingerprints[message.id] = fingerprint;
     if (_messageFingerprints.length > 500) {
