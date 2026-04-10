@@ -1,5 +1,6 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +15,9 @@ import 'package:vox_flutter/ui/chat/file_picker_service.dart';
 import 'package:vox_flutter/ui/chat/message_sender.dart';
 import 'package:vox_flutter/utils/media_downloader.dart';
 import 'package:vox_flutter/utils/user_error_message.dart';
+
+/// Maximum number of concurrent media upload tasks.
+const int _maxConcurrentUploads = 3;
 
 class ChatMediaActionHandler {
   const ChatMediaActionHandler({
@@ -60,7 +64,7 @@ class ChatMediaActionHandler {
       showSnack: showSnack,
     );
     if (assets.isEmpty) return;
-    unawaited(_sendPickedMedia(assets));
+    unawaited(_sendPickedMediaConcurrent(assets));
   }
 
   Future<void> pickFiles() async {
@@ -73,12 +77,85 @@ class ChatMediaActionHandler {
     if (files.length >= ChatMediaPicker.maxSelectionCount) {
       showSnack('文件最多可选 ${ChatMediaPicker.maxSelectionCount} 项。');
     }
-    unawaited(_sendSelectedFiles(files));
+    unawaited(_sendSelectedFilesConcurrent(files));
   }
 
+  // ── Concurrent media sending ──────────────────────────────────────────
+
+  /// Sends picked media items concurrently, up to [_maxConcurrentUploads]
+  /// at a time instead of waiting for each one sequentially.
+  Future<void> _sendPickedMediaConcurrent(List<ChatPickedAsset> assets) async {
+    final pending = <Future<void>>[];
+    for (final item in assets) {
+      if (pending.length >= _maxConcurrentUploads) {
+        await Future.any(pending);
+        pending.removeWhere(_isFutureCompleted);
+      }
+      final future = _sendSingleAsset(item);
+      pending.add(future);
+    }
+    await Future.wait(pending);
+  }
+
+  Future<void> _sendSingleAsset(ChatPickedAsset item) async {
+    try {
+      switch (item.kind) {
+        case ChatPickedAssetKind.image:
+          await _sendImageAsset(item.asset);
+          break;
+        case ChatPickedAssetKind.video:
+          await _sendVideoAsset(item.asset);
+          break;
+        case ChatPickedAssetKind.dynamicPhoto:
+          await _sendDynamicAsset(item.asset);
+          break;
+      }
+    } catch (error) {
+      showSnack(UserErrorMessage.from(error));
+    }
+  }
+
+  /// Sends files concurrently.
+  Future<void> _sendSelectedFilesConcurrent(List<PlatformFile> files) async {
+    final pending = <Future<void>>[];
+    for (final file in files.take(ChatMediaPicker.maxSelectionCount)) {
+      if (pending.length >= _maxConcurrentUploads) {
+        await Future.any(pending);
+        pending.removeWhere(_isFutureCompleted);
+      }
+      final future = _sendSingleFile(file);
+      pending.add(future);
+    }
+    await Future.wait(pending);
+  }
+
+  Future<void> _sendSingleFile(PlatformFile file) async {
+    try {
+      if ((file.path ?? '').trim().isEmpty) {
+        showSnack('无法读取所选文件。');
+        return;
+      }
+      final size = file.size;
+      if (size > ChatMediaPicker.videoMaxBytes) {
+        showSnack('文件大小 ${_formatBytes(size)}，超过 256MB，已跳过。');
+        return;
+      }
+      await messageSender.sendFileFromPath(
+        filePath: file.path!,
+        fileName: file.name,
+        fileSize: size,
+      );
+    } catch (error) {
+      showSnack(UserErrorMessage.from(error));
+    }
+  }
+
+  // ── Individual asset senders ──────────────────────────────────────────
+
   Future<void> _sendDynamicAsset(AssetEntity asset) async {
+    // Reuse smaller thumbnail (160px) from picker cache when available
     final previewBytes = await asset.thumbnailDataWithSize(
-      const ThumbnailSize(320, 320),
+      const ThumbnailSize(160, 160),
     );
     await Future<void>.delayed(const Duration(milliseconds: 16));
 
@@ -113,22 +190,6 @@ class ChatMediaActionHandler {
     );
   }
 
-  Future<void> _sendPickedMedia(List<ChatPickedAsset> assets) async {
-    for (final item in assets) {
-      switch (item.kind) {
-        case ChatPickedAssetKind.image:
-          await _sendImageAsset(item.asset);
-          break;
-        case ChatPickedAssetKind.video:
-          await _sendVideoAsset(item.asset);
-          break;
-        case ChatPickedAssetKind.dynamicPhoto:
-          await _sendDynamicAsset(item.asset);
-          break;
-      }
-    }
-  }
-
   Future<void> _sendImageAsset(AssetEntity asset) async {
     final file = await _resolveFile(asset);
     if (file == null) {
@@ -142,8 +203,9 @@ class ChatMediaActionHandler {
       return;
     }
 
+    // Reuse smaller 160px thumbnail instead of regenerating 320px
     final previewBytes = await asset.thumbnailDataWithSize(
-      const ThumbnailSize(320, 320),
+      const ThumbnailSize(160, 160),
     );
     await messageSender.sendImageFromPath(
       filePath: file.path,
@@ -168,8 +230,9 @@ class ChatMediaActionHandler {
       return;
     }
 
+    // Reuse smaller 160px thumbnail instead of regenerating 320px
     final previewBytes = await asset.thumbnailDataWithSize(
-      const ThumbnailSize(320, 320),
+      const ThumbnailSize(160, 160),
     );
     await messageSender.sendVideoFromPath(
       filePath: file.path,
@@ -182,24 +245,7 @@ class ChatMediaActionHandler {
     );
   }
 
-  Future<void> _sendSelectedFiles(List<PlatformFile> files) async {
-    for (final file in files.take(ChatMediaPicker.maxSelectionCount)) {
-      if ((file.path ?? '').trim().isEmpty) {
-        showSnack('无法读取所选文件。');
-        continue;
-      }
-      final size = file.size;
-      if (size > ChatMediaPicker.videoMaxBytes) {
-        showSnack('文件大小 ${_formatBytes(size)}，超过 256MB，已跳过。');
-        continue;
-      }
-      await messageSender.sendFileFromPath(
-        filePath: file.path!,
-        fileName: file.name,
-        fileSize: size,
-      );
-    }
-  }
+  // ── Helpers ───────────────────────────────────────────────────────────
 
   String _formatBytes(int bytes) {
     const units = <String>['B', 'KB', 'MB', 'GB'];
@@ -262,4 +308,12 @@ class ChatMediaActionHandler {
       showSnack(UserErrorMessage.from(error));
     }
   }
+}
+
+/// Checks if a Future in a list is already completed by attempting
+/// to use a completer trick via Future.any timeout.
+bool _isFutureCompleted(Future<void> future) {
+  var done = false;
+  future.whenComplete(() => done = true);
+  return done;
 }

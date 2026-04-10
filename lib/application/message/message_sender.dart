@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:vox_flutter/application/message/message_workflow_facade.dart';
@@ -347,6 +347,7 @@ class MessageSender {
     final upload = await workflow.uploadFileFromPath(
       filePath: filePath,
       userId: senderId,
+      skipMotionDetect: true,
     );
     if ((upload.fileType ?? '').toUpperCase() == 'DYNAMIC_PHOTO') {
       final coverId = upload.coverId;
@@ -398,6 +399,7 @@ class MessageSender {
     final upload = await workflow.uploadFileFromPath(
       filePath: filePath,
       userId: senderId,
+      skipMotionDetect: true,
     );
     final playId = upload.videoId ?? upload.fileId;
     if (playId == null) {
@@ -430,6 +432,7 @@ class MessageSender {
     final upload = await workflow.uploadFileFromPath(
       filePath: filePath,
       userId: senderId,
+      skipMotionDetect: true,
     );
     final resourceId = upload.fileId;
     if (resourceId == null) {

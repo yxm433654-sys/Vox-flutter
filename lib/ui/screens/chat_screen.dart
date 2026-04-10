@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -416,10 +416,12 @@ class _ChatScreenState extends State<ChatScreen> {
       uploadFileFromPath: ({
         required String filePath,
         int? userId,
+        bool skipMotionDetect = false,
       }) {
         return state.attachments.uploadNormalFromPath(
           filePath: filePath,
           userId: userId,
+          skipMotionDetect: skipMotionDetect,
         );
       },
       clearConversation: ({

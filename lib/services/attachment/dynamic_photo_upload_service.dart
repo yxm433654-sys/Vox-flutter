@@ -18,8 +18,8 @@ class DynamicPhotoUploadService {
           throw Exception('Live Photo pair is missing the video path.');
         }
         return _files.uploadLivePhotoAuto(
-          jpegPath: pickResult.coverPath,
-          movPath: videoPath,
+          imagePath: pickResult.coverPath,
+          videoPath: videoPath,
           userId: userId,
         );
       case DynamicMediaUploadMode.motionPhotoFile:

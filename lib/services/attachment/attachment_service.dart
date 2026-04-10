@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -52,17 +52,20 @@ class AttachmentService {
   Future<AttachmentUploadResponse> uploadNormal({
     required PlatformFile file,
     int? userId,
+    bool skipMotionDetect = false,
   }) async {
     return _uploadMultipart(
       path: '/api/files/upload',
       userId: userId,
       files: [await _toMultipart(file, 'file')],
+      fields: skipMotionDetect ? {'skipMotionDetect': 'true'} : null,
     );
   }
 
   Future<AttachmentUploadResponse> uploadNormalFromXFile({
     required XFile file,
     int? userId,
+    bool skipMotionDetect = false,
   }) async {
     return _uploadMultipart(
       path: '/api/files/upload',
@@ -74,46 +77,49 @@ class AttachmentService {
           filename: file.name,
         ),
       ],
+      fields: skipMotionDetect ? {'skipMotionDetect': 'true'} : null,
     );
   }
 
   Future<AttachmentUploadResponse> uploadNormalFromPath({
     required String filePath,
     int? userId,
+    bool skipMotionDetect = false,
   }) async {
     return _uploadMultipart(
       path: '/api/files/upload',
       userId: userId,
       files: [await http.MultipartFile.fromPath('file', filePath)],
+      fields: skipMotionDetect ? {'skipMotionDetect': 'true'} : null,
     );
   }
 
   Future<AttachmentUploadResponse> uploadLivePhoto({
-    required PlatformFile jpeg,
-    required PlatformFile mov,
+    required PlatformFile image,
+    required PlatformFile video,
     int? userId,
   }) async {
     return _uploadMultipart(
       path: '/api/files/upload/live-photo',
       userId: userId,
       files: [
-        await _toMultipart(jpeg, 'jpeg'),
-        await _toMultipart(mov, 'mov'),
+        await _toMultipart(image, 'image'),
+        await _toMultipart(video, 'video'),
       ],
     );
   }
 
   Future<AttachmentUploadResponse> uploadLivePhotoAuto({
-    required String jpegPath,
-    required String movPath,
+    required String imagePath,
+    required String videoPath,
     int? userId,
   }) async {
     return _uploadMultipart(
       path: '/api/files/upload/live-photo',
       userId: userId,
       files: [
-        await http.MultipartFile.fromPath('jpeg', jpegPath),
-        await http.MultipartFile.fromPath('mov', movPath),
+        await http.MultipartFile.fromPath('image', imagePath),
+        await http.MultipartFile.fromPath('video', videoPath),
       ],
     );
   }

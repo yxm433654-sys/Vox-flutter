@@ -1,4 +1,4 @@
-﻿import 'package:vox_flutter/models/attachment_upload_response.dart';
+import 'package:vox_flutter/models/attachment_upload_response.dart';
 import 'package:vox_flutter/models/message.dart';
 import 'package:vox_flutter/services/attachment/attachment_service.dart';
 
@@ -63,6 +63,7 @@ class MessageWorkflowFacade {
   final Future<AttachmentUploadResponse> Function({
     required String filePath,
     int? userId,
+    bool skipMotionDetect,
   }) uploadFileFromPath;
   final Future<void> Function({
     required int userId,
