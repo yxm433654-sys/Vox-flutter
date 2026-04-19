@@ -25,6 +25,7 @@ class DynamicPhotoScreen extends StatefulWidget {
 
 class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
   VideoPlayerController? _controller;
+  Completer<bool>? _controllerReadyCompleter;
   bool _loading = false;
   bool _holding = false;
   bool _showVideo = false;
@@ -59,44 +60,94 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
     super.dispose();
   }
 
-  Future<void> _ensureController() async {
-    if (_controller != null || _loading) return;
+  Future<bool> _ensureController() async {
+    final existingController = _controller;
+    if (existingController != null && existingController.value.isInitialized) {
+      return true;
+    }
 
-    setState(() {
+    final inFlight = _controllerReadyCompleter;
+    if (inFlight != null) {
+      return inFlight.future;
+    }
+
+    final completer = Completer<bool>();
+    _controllerReadyCompleter = completer;
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    } else {
       _loading = true;
       _error = null;
-    });
+    }
 
+    VideoPlayerController? pendingController;
     try {
-      final controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
-      await controller.initialize();
-      await controller.setLooping(false);
-      await controller.setVolume(1.0);
-      final ratio = controller.value.aspectRatio;
-      if (ratio.isFinite && ratio > 0) {
-        _aspectRatio = ratio;
+      pendingController = VideoPlayerController.networkUrl(
+        Uri.parse(widget.videoUrl),
+      );
+      await pendingController.initialize();
+      await pendingController.setLooping(false);
+      await pendingController.setVolume(1.0);
+      if (!mounted) {
+        await pendingController.dispose();
+        pendingController = null;
+        if (!completer.isCompleted) {
+          completer.complete(false);
+        }
+        return false;
       }
-      _controller = controller;
+      _controller = pendingController;
+      pendingController = null;
+      if (!completer.isCompleted) {
+        completer.complete(true);
+      }
+      return true;
     } catch (e) {
       _error = e.toString();
+      if (!completer.isCompleted) {
+        completer.complete(false);
+      }
+      return false;
     } finally {
+      await pendingController?.dispose();
+      _controllerReadyCompleter = null;
+      final ratio = _controller?.value.aspectRatio;
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+          if (ratio != null && ratio.isFinite && ratio > 0) {
+            _aspectRatio = ratio;
+          }
+        });
+      } else {
+        _loading = false;
+        if (ratio != null && ratio.isFinite && ratio > 0) {
+          _aspectRatio = ratio;
+        }
       }
     }
   }
 
   Future<void> _startPreview() async {
     _holding = true;
-    await HapticFeedback.heavyImpact();
-    await _ensureController();
+    unawaited(HapticFeedback.heavyImpact());
+    final ready = await _ensureController();
     final controller = _controller;
-    if (!_holding || controller == null || !controller.value.isInitialized) {
+    if (!_holding ||
+        !ready ||
+        controller == null ||
+        !controller.value.isInitialized) {
       return;
     }
     await controller.seekTo(Duration.zero);
+    if (!_holding) {
+      return;
+    }
     await controller.play();
-    if (mounted) {
+    if (mounted && _holding) {
       setState(() => _showVideo = true);
     }
   }
@@ -201,6 +252,13 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
                                 widget.coverUrl,
                                 fit: BoxFit.contain,
                                 gaplessPlayback: true,
+                                loadingBuilder:
+                                    (context, child, loadingProgress) {
+                                      if (loadingProgress == null) {
+                                        return child;
+                                      }
+                                      return const _DetailPlaceholder();
+                                    },
                                 errorBuilder: (_, __, ___) =>
                                     const _DetailPlaceholder(),
                               )
@@ -224,22 +282,38 @@ class _DynamicPhotoScreenState extends State<DynamicPhotoScreen> {
                                 ),
                               ),
                             if (_loading)
-                              Positioned.fill(
-                                child: Container(
-                                  color: Colors.black.withOpacity(0.18),
-                                  alignment: Alignment.center,
-                                  child: const SizedBox(
-                                    width: 220,
-                                    child: Column(
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 16,
+                                child: Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.58),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        CircularProgressIndicator(),
-                                        SizedBox(height: 12),
+                                        SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        SizedBox(width: 8),
                                         Text(
                                           'Preparing dynamic photo...',
                                           style: TextStyle(
                                             color: Colors.white,
                                             fontWeight: FontWeight.w600,
+                                            fontSize: 12,
                                           ),
                                         ),
                                       ],
